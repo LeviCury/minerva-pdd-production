@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema inteligente de construção de PDD da Minerva S.A.">
+    <title>Minerva PDD Generator - Construtor Inteligente</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Libraries -->
+    <script src="https://unpkg.com/docx@8.2.2/build/index.umd.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="src/css/styles.css">
+</head>
+<body>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">M</div>
+            <div class="logo-text">
+                <h1>Minerva PDD Generator</h1>
+                <span>Construtor Inteligente de PDD com IA</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div class="api-config">
+                <div id="apiStatus" class="api-status" title="IA Desconectada"></div>
+                <input type="password" id="apiKey" class="api-input" 
+                       placeholder="OpenAI API Key" 
+                       onchange="App.saveApiKey()">
+            </div>
+            <button class="btn btn-outline" onclick="App.showHelp()">❓ Ajuda</button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         MAIN CONTENT
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <main class="main-centered">
+        <div class="input-container">
+            <div class="input-header">
+                <h2>📝 Descreva seu Projeto</h2>
+                <p>Cole a descrição do projeto que deseja transformar em PDD. A IA irá analisar e extrair todas as informações automaticamente.</p>
+            </div>
+            
+            <textarea id="projectText" class="project-textarea" placeholder="Exemplo:
+
+O processo &quot;Lançamento de Despesas Paraguai&quot; tem como objetivo automatizar o registro de despesas relacionadas ao transporte de mercadorias, como taxas portuárias e serviços de frete.
+
+Para isso será construído 4 automações via RPA.
+
+O primeiro RPA inicia com o recebimento de e-mails enviados pelos fornecedores, ele irá extrair os anexos, convertê-los para base64 e armazená-los no banco de dados dbrpa no servidor STARK/TERCEIROS.
+
+Em seguida, o segundo RPA lê os arquivos nos formatos PDF, XML ou Excel, extrai os dados relevantes, formata-os em JSON e os grava no banco de dados dbintegracao no servidor LOKI.
+
+O terceiro RPA, irá executar uma procedure que entregará registros disponíveis para integração, realiza-se a integração com o SAP via sistema Dux, utilizando o módulo Export Logistics por meio de navegação em telas, finalizando o lançamento das despesas.
+
+Todo o processamento é registrado no banco de dados para fins de auditoria e controle do robô. Ao final do dia, um quarto RPA envia um e-mail com o resumo das atividades e uma planilha contendo todos os registros processados."></textarea>
+            
+            <div class="input-footer">
+                <div class="stats">
+                    <span id="charCount">0 caracteres</span>
+                    <span id="wordCount">0 palavras</span>
+                </div>
+                <div class="input-actions">
+                    <button class="btn-secondary" onclick="App.clearAll()">🗑️ Limpar</button>
+                    <button class="btn-primary" onclick="App.analyzeProject()">
+                        🤖 Analisar com IA
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🔍</div>
+                <h3>Análise Inteligente</h3>
+                <p>A IA identifica automaticamente RPAs, sistemas, bancos de dados e fluxos</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">✏️</div>
+                <h3>Revisão Fácil</h3>
+                <p>Revise e ajuste as informações extraídas antes de gerar o documento</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📄</div>
+                <h3>PDD Profissional</h3>
+                <p>Documento Word completo com capa, sumário e todas as seções padrão</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         REVIEW MODAL
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📋 Revise as Informações Extraídas</h2>
+                <button class="modal-close" onclick="App.closeReview()">×</button>
+            </div>
+            <div class="modal-body" id="reviewContent">
+                <!-- Conteúdo gerado dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="App.closeReview()">Cancelar</button>
+                <button class="btn-primary btn-large" onclick="App.generateDocument()">
+                    📄 Gerar PDD
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LOADING
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="loading" class="loading">
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <div class="loading-title" id="loadingTitle">Processando...</div>
+            <div class="loading-subtitle" id="loadingSubtitle">Aguarde um momento</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         TOAST
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="toast" class="toast"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SCRIPTS
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <script src="src/js/aiAnalyzer.js"></script>
+    <script src="src/js/pddBuilder.js"></script>
+    <script src="src/js/app.js"></script>
+</body>
+</html>
