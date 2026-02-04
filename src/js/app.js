@@ -1,17 +1,22 @@
 /**
- * MINERVA PDD GENERATOR - Main Application v2.0
- * Sistema inteligente de construção de PDD
+ * MINERVA PDD GENERATOR - Main Application v3.0
+ * Agente Construtor de PDD com Detecção Inteligente de Lacunas
  */
 
 const App = (function() {
     'use strict';
 
-    // Estado da aplicação
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ESTADO DA APLICAÇÃO
+    // ═══════════════════════════════════════════════════════════════════════════
+
     let state = {
         apiKey: '',
         rawText: '',
         pddData: null,
-        isAnalyzing: false
+        isAnalyzing: false,
+        pendingGaps: [],
+        additionalContext: ''
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -31,8 +36,20 @@ const App = (function() {
         document.getElementById('projectText')?.addEventListener('input', updateStats);
         document.getElementById('apiKey')?.addEventListener('change', saveApiKey);
         
+        // Fechar modais ao clicar fora
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeAllModals();
+            });
+        });
+        
+        // Tecla ESC fecha modais
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeAllModals();
+        });
+        
         updateStats();
-        console.log('Minerva PDD Generator v2.0 initialized');
+        console.log('Minerva PDD Generator v3.0 - Agente Construtor Inteligente');
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -69,7 +86,7 @@ const App = (function() {
         if (toast) {
             toast.textContent = message;
             toast.className = `toast show ${type}`;
-            setTimeout(() => toast.classList.remove('show'), 3500);
+            setTimeout(() => toast.classList.remove('show'), 4000);
         }
     }
 
@@ -106,8 +123,12 @@ const App = (function() {
         return div.innerHTML;
     }
 
+    function closeAllModals() {
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANÁLISE COM IA
+    // ANÁLISE COM IA - FLUXO PRINCIPAL
     // ═══════════════════════════════════════════════════════════════════════════
 
     async function analyzeProject() {
@@ -118,52 +139,237 @@ const App = (function() {
             return;
         }
 
-        if (text.length < 50) {
-            showToast('Texto muito curto. Descreva melhor o projeto.', 'error');
+        if (text.length < 100) {
+            showToast('Texto muito curto. Descreva melhor o projeto para uma análise completa.', 'error');
             return;
         }
 
         if (!state.apiKey) {
-            showToast('Configure a API Key primeiro', 'error');
+            showToast('Configure a API Key da OpenAI primeiro', 'error');
             document.getElementById('apiKey')?.focus();
             return;
         }
 
         state.rawText = text;
         state.isAnalyzing = true;
+        state.additionalContext = '';
         
-        showLoading('Analisando com IA', 'Extraindo informações do projeto...');
+        showLoading('🤖 Analisando com IA', 'Extraindo requisitos, regras de negócio e estrutura do PDD...');
 
         try {
             const pddData = await AIAnalyzer.analyze(text, state.apiKey);
             state.pddData = pddData;
             
             hideLoading();
-            showToast('Análise concluída! Revise os dados extraídos.', 'success');
             
-            // Mostrar formulário de revisão
-            showReviewForm(pddData);
+            // Verificar lacunas críticas
+            const criticalGaps = AIAnalyzer.getCriticalGaps(pddData);
+            
+            if (criticalGaps.length > 0) {
+                // Mostrar modal de lacunas
+                showGapsModal(criticalGaps, pddData);
+            } else {
+                // Ir direto para revisão
+                showAnalysisResult(pddData);
+            }
             
         } catch (error) {
             console.error('Erro na análise:', error);
             hideLoading();
-            showToast(error.message || 'Erro na análise', 'error');
+            showToast(error.message || 'Erro na análise. Tente novamente.', 'error');
         }
         
         state.isAnalyzing = false;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // FORMULÁRIO DE REVISÃO
+    // MODAL DE LACUNAS CRÍTICAS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function showReviewForm(pddData) {
+    function showGapsModal(gaps, pddData) {
+        const modal = document.getElementById('gapsModal');
+        const content = document.getElementById('gapsContent');
+        
+        if (!modal || !content) return;
+
+        state.pendingGaps = gaps;
+
+        let html = `
+            <div class="gaps-header">
+                <div class="gaps-icon">⚠️</div>
+                <h3>Informações Importantes Não Identificadas</h3>
+                <p>A IA identificou algumas informações que podem melhorar o PDD. Você pode:</p>
+            </div>
+
+            <div class="gaps-options">
+                <div class="gap-option" onclick="App.proceedWithoutGaps()">
+                    <div class="option-icon">✅</div>
+                    <div class="option-content">
+                        <strong>Gerar PDD mesmo assim</strong>
+                        <span>Continuar com as informações disponíveis. O PDD será gerado com o contexto atual.</span>
+                    </div>
+                </div>
+                <div class="gap-option" onclick="App.showGapInputs()">
+                    <div class="option-icon">✏️</div>
+                    <div class="option-content">
+                        <strong>Adicionar informações faltantes</strong>
+                        <span>Responder às perguntas abaixo para um PDD mais completo.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gaps-list">
+                <h4>📋 ${gaps.length} informação(ões) não identificada(s):</h4>
+        `;
+
+        gaps.forEach((gap, i) => {
+            const impactoClass = gap.impacto === 'ALTO' ? 'high' : gap.impacto === 'MEDIO' ? 'medium' : 'low';
+            html += `
+                <div class="gap-item ${impactoClass}">
+                    <div class="gap-badge">${gap.impacto}</div>
+                    <div class="gap-info">
+                        <strong>${gap.descricao}</strong>
+                        <span class="gap-question">${gap.sugestao_pergunta}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+            </div>
+
+            <div id="gapInputsContainer" class="gap-inputs-container" style="display: none;">
+                <h4>📝 Preencha as informações:</h4>
+        `;
+
+        gaps.forEach((gap, i) => {
+            html += `
+                <div class="gap-input-field">
+                    <label>${gap.sugestao_pergunta}</label>
+                    <input type="text" id="gap_input_${i}" placeholder="Digite aqui..." data-campo="${gap.campo}" />
+                </div>
+            `;
+        });
+
+        html += `
+                <div class="gap-inputs-actions">
+                    <button class="btn-secondary" onclick="App.hideGapInputs()">Voltar</button>
+                    <button class="btn-primary" onclick="App.submitGapInputs()">
+                        🔄 Reanalisar com novas informações
+                    </button>
+                </div>
+            </div>
+        `;
+
+        content.innerHTML = html;
+        modal.classList.add('active');
+    }
+
+    function showGapInputs() {
+        const container = document.getElementById('gapInputsContainer');
+        const options = document.querySelector('.gaps-options');
+        if (container) container.style.display = 'block';
+        if (options) options.style.display = 'none';
+    }
+
+    function hideGapInputs() {
+        const container = document.getElementById('gapInputsContainer');
+        const options = document.querySelector('.gaps-options');
+        if (container) container.style.display = 'none';
+        if (options) options.style.display = 'flex';
+    }
+
+    async function submitGapInputs() {
+        // Coletar respostas
+        let additionalInfo = [];
+        state.pendingGaps.forEach((gap, i) => {
+            const input = document.getElementById(`gap_input_${i}`);
+            if (input && input.value.trim()) {
+                additionalInfo.push(`${gap.sugestao_pergunta}\nResposta: ${input.value.trim()}`);
+            }
+        });
+
+        if (additionalInfo.length === 0) {
+            showToast('Preencha pelo menos uma informação ou clique em "Gerar mesmo assim"', 'error');
+            return;
+        }
+
+        closeAllModals();
+        state.additionalContext = additionalInfo.join('\n\n');
+        
+        showLoading('🔄 Reanalisando', 'Incorporando novas informações ao PDD...');
+
+        try {
+            const pddData = await AIAnalyzer.reanalyzeWithContext(
+                state.rawText, 
+                state.additionalContext, 
+                state.apiKey
+            );
+            state.pddData = pddData;
+            
+            hideLoading();
+            showAnalysisResult(pddData);
+            
+        } catch (error) {
+            console.error('Erro na reanálise:', error);
+            hideLoading();
+            showToast(error.message || 'Erro na reanálise', 'error');
+        }
+    }
+
+    function proceedWithoutGaps() {
+        closeAllModals();
+        showAnalysisResult(state.pddData);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RESULTADO DA ANÁLISE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function showAnalysisResult(pddData) {
         const modal = document.getElementById('reviewModal');
         const content = document.getElementById('reviewContent');
         
         if (!modal || !content) return;
 
+        const stats = pddData._estatisticas || {};
+        const qualidade = pddData.analise_qualidade || {};
+
         let html = `
+            <!-- Resumo da Análise -->
+            <div class="analysis-summary">
+                <div class="summary-header">
+                    <h3>📊 Resultado da Análise</h3>
+                    <div class="confidence-badge ${getConfidenceClass(qualidade.confianca_extracao)}">
+                        ${qualidade.confianca_extracao || 70}% de confiança
+                    </div>
+                </div>
+                <div class="summary-stats">
+                    <div class="stat-item">
+                        <span class="stat-value">${stats.total_rpas || 0}</span>
+                        <span class="stat-label">RPAs</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${stats.total_requisitos || 0}</span>
+                        <span class="stat-label">Requisitos</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${stats.total_regras || 0}</span>
+                        <span class="stat-label">Regras</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${stats.total_integracoes || 0}</span>
+                        <span class="stat-label">Integrações</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${stats.total_riscos || 0}</span>
+                        <span class="stat-label">Riscos</span>
+                    </div>
+                </div>
+                ${qualidade.observacoes_analise ? `<p class="analysis-notes">${escapeHtml(qualidade.observacoes_analise)}</p>` : ''}
+            </div>
+
+            <!-- Informações do Projeto -->
             <div class="review-section">
                 <h3>📋 Informações do Projeto</h3>
                 <div class="review-field">
@@ -171,32 +377,77 @@ const App = (function() {
                     <input type="text" id="edit_projeto_nome" value="${escapeHtml(pddData.projeto?.nome || '')}" />
                 </div>
                 <div class="review-field">
+                    <label>Código do Projeto</label>
+                    <input type="text" id="edit_projeto_codigo" value="${escapeHtml(pddData.projeto?.nome_codigo || '')}" />
+                </div>
+                <div class="review-field">
                     <label>Objetivo</label>
                     <textarea id="edit_projeto_objetivo" rows="3">${escapeHtml(pddData.projeto?.objetivo || '')}</textarea>
                 </div>
                 <div class="review-field">
-                    <label>Escopo</label>
-                    <textarea id="edit_projeto_escopo" rows="2">${escapeHtml(pddData.projeto?.escopo || '')}</textarea>
+                    <label>Justificativa</label>
+                    <textarea id="edit_projeto_justificativa" rows="2">${escapeHtml(pddData.projeto?.justificativa || '')}</textarea>
                 </div>
                 <div class="review-field">
-                    <label>Benefícios (um por linha)</label>
-                    <textarea id="edit_projeto_beneficios" rows="3">${(pddData.projeto?.beneficios || []).join('\n')}</textarea>
+                    <label>Escopo - Incluído (um por linha)</label>
+                    <textarea id="edit_projeto_escopo_incluido" rows="3">${(pddData.projeto?.escopo?.incluido || []).join('\n')}</textarea>
+                </div>
+                <div class="review-field">
+                    <label>Escopo - Excluído (um por linha)</label>
+                    <textarea id="edit_projeto_escopo_excluido" rows="2">${(pddData.projeto?.escopo?.excluido || []).join('\n')}</textarea>
+                </div>
+                <div class="review-row">
+                    <div class="review-field">
+                        <label>Complexidade</label>
+                        <select id="edit_projeto_complexidade">
+                            <option value="BAIXA" ${pddData.projeto?.complexidade === 'BAIXA' ? 'selected' : ''}>Baixa</option>
+                            <option value="MEDIA" ${pddData.projeto?.complexidade === 'MEDIA' ? 'selected' : ''}>Média</option>
+                            <option value="ALTA" ${pddData.projeto?.complexidade === 'ALTA' ? 'selected' : ''}>Alta</option>
+                            <option value="MUITO_ALTA" ${pddData.projeto?.complexidade === 'MUITO_ALTA' ? 'selected' : ''}>Muito Alta</option>
+                        </select>
+                    </div>
+                    <div class="review-field">
+                        <label>Criticidade</label>
+                        <select id="edit_projeto_criticidade">
+                            <option value="BAIXA" ${pddData.projeto?.criticidade === 'BAIXA' ? 'selected' : ''}>Baixa</option>
+                            <option value="MEDIA" ${pddData.projeto?.criticidade === 'MEDIA' ? 'selected' : ''}>Média</option>
+                            <option value="ALTA" ${pddData.projeto?.criticidade === 'ALTA' ? 'selected' : ''}>Alta</option>
+                            <option value="CRITICA" ${pddData.projeto?.criticidade === 'CRITICA' ? 'selected' : ''}>Crítica</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="review-field">
                     <label>Sistemas Envolvidos (separados por vírgula)</label>
                     <input type="text" id="edit_projeto_sistemas" value="${(pddData.projeto?.sistemas_envolvidos || []).join(', ')}" />
+                </div>
+                <div class="review-field">
+                    <label>Áreas Envolvidas (separadas por vírgula)</label>
+                    <input type="text" id="edit_projeto_areas" value="${(pddData.projeto?.areas_envolvidas || []).join(', ')}" />
+                </div>
+            </div>
+
+            <!-- Benefícios -->
+            <div class="review-section">
+                <h3>💰 Benefícios Esperados</h3>
+                <div class="review-field">
+                    <label>Benefícios Tangíveis (um por linha)</label>
+                    <textarea id="edit_beneficios_tangiveis" rows="3">${(pddData.projeto?.beneficios?.tangiveis || []).join('\n')}</textarea>
+                </div>
+                <div class="review-field">
+                    <label>Benefícios Intangíveis (um por linha)</label>
+                    <textarea id="edit_beneficios_intangiveis" rows="3">${(pddData.projeto?.beneficios?.intangiveis || []).join('\n')}</textarea>
                 </div>
             </div>
         `;
 
         // RPAs
         if (pddData.rpas?.length > 0) {
-            html += `<div class="review-section"><h3>🤖 RPAs Identificados</h3>`;
+            html += `<div class="review-section"><h3>🤖 RPAs Identificados (${pddData.rpas.length})</h3>`;
             
             pddData.rpas.forEach((rpa, i) => {
                 html += `
                     <div class="rpa-card">
-                        <div class="rpa-header">RPA ${i + 1}</div>
+                        <div class="rpa-header">${rpa.codigo || 'RPA-' + (i+1).toString().padStart(3, '0')} - ${escapeHtml(rpa.nome || 'RPA ' + (i+1))}</div>
                         <div class="review-field">
                             <label>Nome</label>
                             <input type="text" id="edit_rpa_${i}_nome" value="${escapeHtml(rpa.nome || '')}" />
@@ -207,35 +458,137 @@ const App = (function() {
                         </div>
                         <div class="review-row">
                             <div class="review-field">
-                                <label>Trigger</label>
-                                <input type="text" id="edit_rpa_${i}_trigger" value="${escapeHtml(rpa.trigger || '')}" />
+                                <label>Tipo de Trigger</label>
+                                <select id="edit_rpa_${i}_trigger_tipo">
+                                    <option value="EMAIL" ${rpa.trigger?.tipo === 'EMAIL' ? 'selected' : ''}>E-mail</option>
+                                    <option value="AGENDAMENTO" ${rpa.trigger?.tipo === 'AGENDAMENTO' ? 'selected' : ''}>Agendamento</option>
+                                    <option value="MANUAL" ${rpa.trigger?.tipo === 'MANUAL' ? 'selected' : ''}>Manual</option>
+                                    <option value="EVENTO" ${rpa.trigger?.tipo === 'EVENTO' ? 'selected' : ''}>Evento</option>
+                                    <option value="API" ${rpa.trigger?.tipo === 'API' ? 'selected' : ''}>API</option>
+                                </select>
                             </div>
                             <div class="review-field">
                                 <label>Frequência</label>
-                                <input type="text" id="edit_rpa_${i}_frequencia" value="${escapeHtml(rpa.frequencia || '')}" />
+                                <input type="text" id="edit_rpa_${i}_frequencia" value="${escapeHtml(rpa.trigger?.frequencia || '')}" />
                             </div>
                         </div>
                         <div class="review-field">
-                            <label>Input (separados por vírgula)</label>
-                            <input type="text" id="edit_rpa_${i}_input" value="${(rpa.input || []).join(', ')}" />
+                            <label>Trigger - Descrição</label>
+                            <input type="text" id="edit_rpa_${i}_trigger_desc" value="${escapeHtml(rpa.trigger?.descricao || '')}" />
+                        </div>
+                        <div class="review-row">
+                            <div class="review-field">
+                                <label>Entrada - Dados (vírgula)</label>
+                                <input type="text" id="edit_rpa_${i}_entrada" value="${(rpa.entrada?.dados || []).join(', ')}" />
+                            </div>
+                            <div class="review-field">
+                                <label>Saída - Dados (vírgula)</label>
+                                <input type="text" id="edit_rpa_${i}_saida" value="${(rpa.saida?.dados || []).join(', ')}" />
+                            </div>
                         </div>
                         <div class="review-field">
-                            <label>Output (separados por vírgula)</label>
-                            <input type="text" id="edit_rpa_${i}_output" value="${(rpa.output || []).join(', ')}" />
+                            <label>Fluxo de Execução (um passo por linha)</label>
+                            <textarea id="edit_rpa_${i}_fluxo" rows="4">${(rpa.fluxo_execucao || []).map(p => p.acao || p).join('\n')}</textarea>
                         </div>
                         <div class="review-field">
-                            <label>Passos do Fluxo (um por linha)</label>
-                            <textarea id="edit_rpa_${i}_passos" rows="4">${(rpa.passos || []).join('\n')}</textarea>
-                        </div>
-                        <div class="review-field">
-                            <label>Exceções (uma por linha)</label>
-                            <textarea id="edit_rpa_${i}_excecoes" rows="2">${(rpa.excecoes || []).join('\n')}</textarea>
+                            <label>Exceções/Tratamentos de Erro (um por linha)</label>
+                            <textarea id="edit_rpa_${i}_excecoes" rows="2">${(rpa.excecoes || []).map(e => e.cenario || e).join('\n')}</textarea>
                         </div>
                     </div>
                 `;
             });
             
             html += `</div>`;
+        }
+
+        // Requisitos Funcionais
+        if (pddData.requisitos_funcionais?.length > 0) {
+            html += `
+                <div class="review-section collapsible">
+                    <h3 onclick="App.toggleSection(this)">📝 Requisitos Funcionais (${pddData.requisitos_funcionais.length}) <span class="toggle-icon">▼</span></h3>
+                    <div class="section-content">
+            `;
+            
+            pddData.requisitos_funcionais.forEach((rf, i) => {
+                html += `
+                    <div class="rf-card">
+                        <div class="rf-header">
+                            <span class="rf-code">${rf.codigo || 'RF-' + (i+1).toString().padStart(3, '0')}</span>
+                            <span class="rf-priority ${rf.prioridade?.toLowerCase()}">${rf.prioridade || 'SHOULD'}</span>
+                        </div>
+                        <div class="review-field">
+                            <label>Título</label>
+                            <input type="text" id="edit_rf_${i}_titulo" value="${escapeHtml(rf.titulo || '')}" />
+                        </div>
+                        <div class="review-field">
+                            <label>Descrição</label>
+                            <textarea id="edit_rf_${i}_descricao" rows="2">${escapeHtml(rf.descricao || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
+        }
+
+        // Regras de Negócio
+        if (pddData.regras_negocio?.length > 0) {
+            html += `
+                <div class="review-section collapsible">
+                    <h3 onclick="App.toggleSection(this)">📐 Regras de Negócio (${pddData.regras_negocio.length}) <span class="toggle-icon">▼</span></h3>
+                    <div class="section-content">
+            `;
+            
+            pddData.regras_negocio.forEach((rn, i) => {
+                html += `
+                    <div class="rn-card">
+                        <div class="rn-header">
+                            <span class="rn-code">${rn.codigo || 'RN-' + (i+1).toString().padStart(3, '0')}</span>
+                            <span class="rn-type">${rn.tipo || 'VAL'}</span>
+                        </div>
+                        <div class="review-field">
+                            <label>Título</label>
+                            <input type="text" id="edit_rn_${i}_titulo" value="${escapeHtml(rn.titulo || '')}" />
+                        </div>
+                        <div class="review-field">
+                            <label>Lógica</label>
+                            <textarea id="edit_rn_${i}_logica" rows="2">${escapeHtml(rn.logica || rn.descricao || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
+        }
+
+        // Integrações
+        if (pddData.integracoes?.length > 0) {
+            html += `
+                <div class="review-section collapsible">
+                    <h3 onclick="App.toggleSection(this)">🔗 Integrações (${pddData.integracoes.length}) <span class="toggle-icon">▼</span></h3>
+                    <div class="section-content">
+            `;
+            
+            pddData.integracoes.forEach((int, i) => {
+                html += `
+                    <div class="int-card">
+                        <div class="int-header">
+                            <span class="int-code">${int.codigo || 'INT-' + (i+1).toString().padStart(3, '0')}</span>
+                            <span class="int-dir">${int.direcao || 'BIDIRECIONAL'}</span>
+                        </div>
+                        <div class="review-field">
+                            <label>Sistema Externo</label>
+                            <input type="text" id="edit_int_${i}_sistema" value="${escapeHtml(int.sistema_externo || '')}" />
+                        </div>
+                        <div class="review-field">
+                            <label>Propósito</label>
+                            <input type="text" id="edit_int_${i}_proposito" value="${escapeHtml(int.proposito || '')}" />
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
         }
 
         // Infraestrutura
@@ -267,6 +620,12 @@ const App = (function() {
                         <input type="text" id="edit_stake_sponsor" value="${escapeHtml(pddData.stakeholders?.sponsor || '')}" />
                     </div>
                     <div class="review-field">
+                        <label>Product Owner</label>
+                        <input type="text" id="edit_stake_po" value="${escapeHtml(pddData.stakeholders?.product_owner || '')}" />
+                    </div>
+                </div>
+                <div class="review-row">
+                    <div class="review-field">
                         <label>Responsável Negócio</label>
                         <input type="text" id="edit_stake_negocio" value="${escapeHtml(pddData.stakeholders?.responsavel_negocio || '')}" />
                     </div>
@@ -279,23 +638,77 @@ const App = (function() {
         `;
 
         // Riscos
+        if (pddData.riscos?.length > 0) {
+            html += `
+                <div class="review-section collapsible">
+                    <h3 onclick="App.toggleSection(this)">⚠️ Riscos Identificados (${pddData.riscos.length}) <span class="toggle-icon">▼</span></h3>
+                    <div class="section-content">
+                        <table class="risks-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Risco</th>
+                                    <th>Prob.</th>
+                                    <th>Impacto</th>
+                                    <th>Mitigação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            
+            pddData.riscos.forEach((risk, i) => {
+                html += `
+                    <tr>
+                        <td>${risk.codigo || 'RISK-' + (i+1).toString().padStart(3, '0')}</td>
+                        <td><input type="text" id="edit_risk_${i}_desc" value="${escapeHtml(risk.descricao || '')}" /></td>
+                        <td><span class="badge ${risk.probabilidade?.toLowerCase()}">${risk.probabilidade || 'MEDIA'}</span></td>
+                        <td><span class="badge ${risk.impacto?.toLowerCase()}">${risk.impacto || 'MEDIO'}</span></td>
+                        <td><input type="text" id="edit_risk_${i}_mit" value="${escapeHtml(risk.mitigacao || '')}" /></td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table></div></div>`;
+        }
+
+        // Premissas e Restrições
         html += `
             <div class="review-section">
-                <h3>⚠️ Riscos (formato: Risco | Mitigação, um por linha)</h3>
-                <textarea id="edit_riscos" rows="4">${(pddData.riscos || []).map(r => `${r.risco} | ${r.mitigacao}`).join('\n')}</textarea>
+                <h3>📌 Premissas e Restrições</h3>
+                <div class="review-field">
+                    <label>Premissas (uma por linha)</label>
+                    <textarea id="edit_premissas" rows="3">${(pddData.premissas || []).join('\n')}</textarea>
+                </div>
+                <div class="review-field">
+                    <label>Restrições (uma por linha)</label>
+                    <textarea id="edit_restricoes" rows="3">${(pddData.restricoes || []).join('\n')}</textarea>
+                </div>
             </div>
         `;
 
         // Observações
         html += `
             <div class="review-section">
-                <h3>📝 Observações</h3>
+                <h3>📝 Observações Gerais</h3>
                 <textarea id="edit_observacoes" rows="3">${escapeHtml(pddData.observacoes || '')}</textarea>
             </div>
         `;
 
         content.innerHTML = html;
         modal.classList.add('active');
+        
+        showToast(`Análise concluída! ${stats.total_rpas} RPAs, ${stats.total_requisitos} requisitos, ${stats.total_regras} regras identificados.`, 'success');
+    }
+
+    function getConfidenceClass(confidence) {
+        if (confidence >= 80) return 'high';
+        if (confidence >= 60) return 'medium';
+        return 'low';
+    }
+
+    function toggleSection(header) {
+        const section = header.parentElement;
+        section.classList.toggle('collapsed');
     }
 
     function closeReview() {
@@ -314,12 +727,26 @@ const App = (function() {
         const pddData = {
             projeto: {
                 nome: getValue('edit_projeto_nome'),
+                nome_codigo: getValue('edit_projeto_codigo'),
                 objetivo: getValue('edit_projeto_objetivo'),
-                escopo: getValue('edit_projeto_escopo'),
-                beneficios: getArray('edit_projeto_beneficios'),
-                sistemas_envolvidos: getCommaArray('edit_projeto_sistemas')
+                justificativa: getValue('edit_projeto_justificativa'),
+                escopo: {
+                    incluido: getArray('edit_projeto_escopo_incluido'),
+                    excluido: getArray('edit_projeto_escopo_excluido')
+                },
+                beneficios: {
+                    tangiveis: getArray('edit_beneficios_tangiveis'),
+                    intangiveis: getArray('edit_beneficios_intangiveis')
+                },
+                sistemas_envolvidos: getCommaArray('edit_projeto_sistemas'),
+                areas_envolvidas: getCommaArray('edit_projeto_areas'),
+                complexidade: getValue('edit_projeto_complexidade'),
+                criticidade: getValue('edit_projeto_criticidade')
             },
             rpas: [],
+            requisitos_funcionais: state.pddData?.requisitos_funcionais || [],
+            regras_negocio: state.pddData?.regras_negocio || [],
+            integracoes: state.pddData?.integracoes || [],
             infraestrutura: {
                 servidores: [],
                 bancos_dados: [],
@@ -327,26 +754,45 @@ const App = (function() {
             },
             stakeholders: {
                 sponsor: getValue('edit_stake_sponsor'),
+                product_owner: getValue('edit_stake_po'),
                 responsavel_negocio: getValue('edit_stake_negocio'),
                 responsavel_tecnico: getValue('edit_stake_tecnico')
             },
-            riscos: [],
-            observacoes: getValue('edit_observacoes')
+            riscos: state.pddData?.riscos || [],
+            premissas: getArray('edit_premissas'),
+            restricoes: getArray('edit_restricoes'),
+            observacoes: getValue('edit_observacoes'),
+            cronograma_sugerido: state.pddData?.cronograma_sugerido || {}
         };
 
         // Coletar RPAs
         let rpaIndex = 0;
         while (document.getElementById(`edit_rpa_${rpaIndex}_nome`)) {
+            const originalRpa = state.pddData?.rpas?.[rpaIndex] || {};
             pddData.rpas.push({
                 numero: rpaIndex + 1,
+                codigo: originalRpa.codigo || `RPA-${(rpaIndex + 1).toString().padStart(3, '0')}`,
                 nome: getValue(`edit_rpa_${rpaIndex}_nome`),
                 descricao: getValue(`edit_rpa_${rpaIndex}_descricao`),
-                trigger: getValue(`edit_rpa_${rpaIndex}_trigger`),
-                frequencia: getValue(`edit_rpa_${rpaIndex}_frequencia`),
-                input: getCommaArray(`edit_rpa_${rpaIndex}_input`),
-                output: getCommaArray(`edit_rpa_${rpaIndex}_output`),
-                passos: getArray(`edit_rpa_${rpaIndex}_passos`),
-                excecoes: getArray(`edit_rpa_${rpaIndex}_excecoes`)
+                trigger: {
+                    tipo: getValue(`edit_rpa_${rpaIndex}_trigger_tipo`),
+                    descricao: getValue(`edit_rpa_${rpaIndex}_trigger_desc`),
+                    frequencia: getValue(`edit_rpa_${rpaIndex}_frequencia`)
+                },
+                entrada: {
+                    dados: getCommaArray(`edit_rpa_${rpaIndex}_entrada`)
+                },
+                saida: {
+                    dados: getCommaArray(`edit_rpa_${rpaIndex}_saida`)
+                },
+                fluxo_execucao: getArray(`edit_rpa_${rpaIndex}_fluxo`).map((acao, i) => ({
+                    passo: i + 1,
+                    acao: acao
+                })),
+                excecoes: getArray(`edit_rpa_${rpaIndex}_excecoes`).map(e => ({
+                    cenario: e
+                })),
+                ...originalRpa
             });
             rpaIndex++;
         }
@@ -374,16 +820,45 @@ const App = (function() {
             }
         });
 
-        // Parsear riscos
-        getArray('edit_riscos').forEach(line => {
-            const parts = line.split('|').map(s => s.trim());
-            if (parts.length >= 2) {
-                pddData.riscos.push({
-                    risco: parts[0],
-                    mitigacao: parts[1]
-                });
+        // Atualizar requisitos funcionais editados
+        let rfIndex = 0;
+        while (document.getElementById(`edit_rf_${rfIndex}_titulo`)) {
+            if (pddData.requisitos_funcionais[rfIndex]) {
+                pddData.requisitos_funcionais[rfIndex].titulo = getValue(`edit_rf_${rfIndex}_titulo`);
+                pddData.requisitos_funcionais[rfIndex].descricao = getValue(`edit_rf_${rfIndex}_descricao`);
             }
-        });
+            rfIndex++;
+        }
+
+        // Atualizar regras de negócio editadas
+        let rnIndex = 0;
+        while (document.getElementById(`edit_rn_${rnIndex}_titulo`)) {
+            if (pddData.regras_negocio[rnIndex]) {
+                pddData.regras_negocio[rnIndex].titulo = getValue(`edit_rn_${rnIndex}_titulo`);
+                pddData.regras_negocio[rnIndex].logica = getValue(`edit_rn_${rnIndex}_logica`);
+            }
+            rnIndex++;
+        }
+
+        // Atualizar integrações editadas
+        let intIndex = 0;
+        while (document.getElementById(`edit_int_${intIndex}_sistema`)) {
+            if (pddData.integracoes[intIndex]) {
+                pddData.integracoes[intIndex].sistema_externo = getValue(`edit_int_${intIndex}_sistema`);
+                pddData.integracoes[intIndex].proposito = getValue(`edit_int_${intIndex}_proposito`);
+            }
+            intIndex++;
+        }
+
+        // Atualizar riscos editados
+        let riskIndex = 0;
+        while (document.getElementById(`edit_risk_${riskIndex}_desc`)) {
+            if (pddData.riscos[riskIndex]) {
+                pddData.riscos[riskIndex].descricao = getValue(`edit_risk_${riskIndex}_desc`);
+                pddData.riscos[riskIndex].mitigacao = getValue(`edit_risk_${riskIndex}_mit`);
+            }
+            riskIndex++;
+        }
 
         return pddData;
     }
@@ -400,14 +875,17 @@ const App = (function() {
             return;
         }
 
-        showLoading('Gerando PDD', 'Criando documento Word profissional...');
+        showLoading('📄 Gerando PDD', 'Criando documento Word profissional completo...');
 
         try {
             const doc = PDDBuilder.build(pddData, {
                 incluirCapa: true,
                 incluirSumario: true,
                 incluirCronograma: true,
-                incluirRiscos: true
+                incluirRiscos: true,
+                incluirRequisitos: true,
+                incluirRegras: true,
+                incluirIntegracoes: true
             });
 
             const blob = await docx.Packer.toBlob(doc);
@@ -417,12 +895,12 @@ const App = (function() {
 
             hideLoading();
             closeReview();
-            showToast('PDD gerado com sucesso!', 'success');
+            showToast('PDD gerado com sucesso! Documento baixado.', 'success');
             
         } catch (error) {
             console.error('Erro ao gerar:', error);
             hideLoading();
-            showToast('Erro ao gerar documento', 'error');
+            showToast('Erro ao gerar documento: ' + error.message, 'error');
         }
     }
 
@@ -435,43 +913,19 @@ const App = (function() {
         if (textArea) textArea.value = '';
         state.pddData = null;
         state.rawText = '';
+        state.additionalContext = '';
         updateStats();
         showToast('Conteúdo limpo', 'info');
     }
 
     function showHelp() {
-        alert(`MINERVA PDD GENERATOR v2.0
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const modal = document.getElementById('helpModal');
+        if (modal) modal.classList.add('active');
+    }
 
-COMO USAR:
-
-1. Configure sua API Key da OpenAI
-2. Cole a descrição do seu projeto
-3. Clique em "Analisar com IA"
-4. Revise e complete as informações extraídas
-5. Clique em "Gerar PDD"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-O QUE A IA EXTRAI:
-
-• Nome e objetivo do projeto
-• Quantidade e detalhes dos RPAs
-• Sistemas e bancos de dados
-• Fluxos de execução
-• Infraestrutura necessária
-• Riscos potenciais
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-DICAS:
-
-• Quanto mais detalhada a descrição, 
-  melhor será a extração
-• Mencione nomes de sistemas, 
-  servidores e bancos
-• Descreva o que cada RPA faz
-• Inclua triggers e frequências`);
+    function closeHelp() {
+        const modal = document.getElementById('helpModal');
+        if (modal) modal.classList.remove('active');
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -485,7 +939,14 @@ DICAS:
         closeReview,
         clearAll,
         showHelp,
-        saveApiKey
+        closeHelp,
+        saveApiKey,
+        proceedWithoutGaps,
+        showGapInputs,
+        hideGapInputs,
+        submitGapInputs,
+        toggleSection,
+        closeAllModals
     };
 
 })();

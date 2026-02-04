@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Sistema inteligente de construção de PDD da Minerva S.A.">
-    <title>Minerva PDD Generator - Construtor Inteligente</title>
+    <meta name="description" content="Agente Construtor de PDD inteligente da Minerva S.A. - Gera documentos PDD completos automaticamente.">
+    <title>Minerva PDD Generator - Agente Construtor Inteligente</title>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,17 +27,17 @@
             <div class="logo-icon">M</div>
             <div class="logo-text">
                 <h1>Minerva PDD Generator</h1>
-                <span>Construtor Inteligente de PDD com IA</span>
+                <span>Agente Construtor Inteligente de PDD v3.0</span>
             </div>
         </div>
         <div class="header-actions">
             <div class="api-config">
                 <div id="apiStatus" class="api-status" title="IA Desconectada"></div>
                 <input type="password" id="apiKey" class="api-input" 
-                       placeholder="OpenAI API Key" 
+                       placeholder="OpenAI API Key (GPT-4)" 
                        onchange="App.saveApiKey()">
             </div>
-            <button class="btn btn-outline" onclick="App.showHelp()">❓ Ajuda</button>
+            <button class="btn btn-outline" onclick="App.showHelp()">❓ Como Funciona</button>
         </div>
     </header>
 
@@ -47,11 +47,13 @@
     <main class="main-centered">
         <div class="input-container">
             <div class="input-header">
-                <h2>📝 Descreva seu Projeto</h2>
-                <p>Cole a descrição do projeto que deseja transformar em PDD. A IA irá analisar e extrair todas as informações automaticamente.</p>
+                <h2>🤖 Construtor Inteligente de PDD</h2>
+                <p>Cole a descrição completa do seu projeto. O agente irá <strong>extrair automaticamente</strong> requisitos, regras de negócio, integrações e toda a estrutura do PDD sem fazer perguntas.</p>
             </div>
             
-            <textarea id="projectText" class="project-textarea" placeholder="Exemplo:
+            <textarea id="projectText" class="project-textarea" placeholder="Cole aqui a descrição do seu projeto de automação RPA...
+
+Exemplo:
 
 O processo &quot;Lançamento de Despesas Paraguai&quot; tem como objetivo automatizar o registro de despesas relacionadas ao transporte de mercadorias, como taxas portuárias e serviços de frete.
 
@@ -63,7 +65,19 @@ Em seguida, o segundo RPA lê os arquivos nos formatos PDF, XML ou Excel, extrai
 
 O terceiro RPA, irá executar uma procedure que entregará registros disponíveis para integração, realiza-se a integração com o SAP via sistema Dux, utilizando o módulo Export Logistics por meio de navegação em telas, finalizando o lançamento das despesas.
 
-Todo o processamento é registrado no banco de dados para fins de auditoria e controle do robô. Ao final do dia, um quarto RPA envia um e-mail com o resumo das atividades e uma planilha contendo todos os registros processados."></textarea>
+Todo o processamento é registrado no banco de dados para fins de auditoria e controle do robô. Ao final do dia, um quarto RPA envia um e-mail com o resumo das atividades e uma planilha contendo todos os registros processados.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 DICA: Quanto mais detalhes você fornecer, melhor será o PDD gerado!
+
+Inclua informações como:
+• Sistemas envolvidos (SAP, Dux, etc.)
+• Bancos de dados e servidores
+• Frequência de execução
+• Triggers (e-mail, agendamento, manual)
+• Tratamento de exceções
+• Volume de processamento"></textarea>
             
             <div class="input-footer">
                 <div class="stats">
@@ -72,8 +86,8 @@ Todo o processamento é registrado no banco de dados para fins de auditoria e co
                 </div>
                 <div class="input-actions">
                     <button class="btn-secondary" onclick="App.clearAll()">🗑️ Limpar</button>
-                    <button class="btn-primary" onclick="App.analyzeProject()">
-                        🤖 Analisar com IA
+                    <button class="btn-primary btn-large" onclick="App.analyzeProject()">
+                        🚀 Gerar PDD Completo
                     </button>
                 </div>
             </div>
@@ -81,30 +95,45 @@ Todo o processamento é registrado no banco de dados para fins de auditoria e co
 
         <div class="features">
             <div class="feature">
-                <div class="feature-icon">🔍</div>
-                <h3>Análise Inteligente</h3>
-                <p>A IA identifica automaticamente RPAs, sistemas, bancos de dados e fluxos</p>
+                <div class="feature-icon">🧠</div>
+                <h3>Extração Automática</h3>
+                <p>A IA extrai requisitos funcionais, regras de negócio, integrações e riscos automaticamente</p>
             </div>
             <div class="feature">
-                <div class="feature-icon">✏️</div>
-                <h3>Revisão Fácil</h3>
-                <p>Revise e ajuste as informações extraídas antes de gerar o documento</p>
+                <div class="feature-icon">⚡</div>
+                <h3>Sem Perguntas</h3>
+                <p>O agente analisa o texto e gera o PDD completo. Só pergunta o essencial se faltar algo crítico</p>
             </div>
             <div class="feature">
-                <div class="feature-icon">📄</div>
+                <div class="feature-icon">📊</div>
                 <h3>PDD Profissional</h3>
-                <p>Documento Word completo com capa, sumário e todas as seções padrão</p>
+                <p>Documento completo com RF, RN, integrações, riscos, cronograma e todos os padrões Minerva</p>
             </div>
         </div>
     </main>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
-         REVIEW MODAL
+         GAPS MODAL - Modal de Lacunas Críticas
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="gapsModal" class="modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2>⚠️ Informações Não Identificadas</h2>
+                <button class="modal-close" onclick="App.closeAllModals()">×</button>
+            </div>
+            <div class="modal-body" id="gapsContent">
+                <!-- Conteúdo gerado dinamicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         REVIEW MODAL - Modal de Revisão
          ═══════════════════════════════════════════════════════════════════════ -->
     <div id="reviewModal" class="modal">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h2>📋 Revise as Informações Extraídas</h2>
+                <h2>📋 Revise o PDD Gerado</h2>
                 <button class="modal-close" onclick="App.closeReview()">×</button>
             </div>
             <div class="modal-body" id="reviewContent">
@@ -113,8 +142,76 @@ Todo o processamento é registrado no banco de dados para fins de auditoria e co
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="App.closeReview()">Cancelar</button>
                 <button class="btn-primary btn-large" onclick="App.generateDocument()">
-                    📄 Gerar PDD
+                    📄 Baixar PDD (.docx)
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         HELP MODAL - Modal de Ajuda
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2>❓ Como Funciona o Agente PDD</h2>
+                <button class="modal-close" onclick="App.closeHelp()">×</button>
+            </div>
+            <div class="modal-body help-content">
+                <div class="help-section">
+                    <h3>🎯 O que é?</h3>
+                    <p>O Minerva PDD Generator é um <strong>agente inteligente</strong> que transforma descrições de projetos de automação RPA em documentos PDD (Process Definition Document) completos e profissionais.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>🚀 Como usar?</h3>
+                    <ol>
+                        <li><strong>Configure a API Key</strong> - Cole sua chave da OpenAI (GPT-4)</li>
+                        <li><strong>Cole a descrição</strong> - Descreva o projeto com o máximo de detalhes</li>
+                        <li><strong>Clique em "Gerar PDD"</strong> - O agente analisa e extrai tudo automaticamente</li>
+                        <li><strong>Revise se necessário</strong> - Ajuste as informações extraídas</li>
+                        <li><strong>Baixe o documento</strong> - Word profissional pronto para uso</li>
+                    </ol>
+                </div>
+
+                <div class="help-section">
+                    <h3>🧠 O que o agente extrai automaticamente?</h3>
+                    <ul>
+                        <li><strong>Informações do Projeto</strong> - Nome, objetivo, escopo, justificativa</li>
+                        <li><strong>RPAs</strong> - Detalhamento completo de cada automação</li>
+                        <li><strong>Requisitos Funcionais (RF)</strong> - O que o sistema deve fazer</li>
+                        <li><strong>Regras de Negócio (RN)</strong> - Validações, cálculos, restrições</li>
+                        <li><strong>Integrações (INT)</strong> - Sistemas externos e APIs</li>
+                        <li><strong>Infraestrutura</strong> - Servidores, bancos, tecnologias</li>
+                        <li><strong>Riscos</strong> - Análise de riscos e mitigações</li>
+                        <li><strong>Cronograma</strong> - Fases sugeridas do projeto</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h3>💡 Dicas para melhores resultados</h3>
+                    <ul>
+                        <li>Descreva <strong>cada RPA</strong> e o que ele faz</li>
+                        <li>Mencione <strong>sistemas</strong> envolvidos (SAP, Dux, etc.)</li>
+                        <li>Indique <strong>bancos de dados</strong> e servidores</li>
+                        <li>Descreva o <strong>trigger</strong> (e-mail, agendamento, manual)</li>
+                        <li>Inclua <strong>frequência</strong> de execução</li>
+                        <li>Mencione <strong>exceções</strong> e tratamentos de erro</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h3>⚠️ Lacunas Críticas</h3>
+                    <p>Se o agente identificar informações importantes faltando, ele mostrará um alerta com duas opções:</p>
+                    <ul>
+                        <li><strong>Gerar mesmo assim</strong> - Continua com o contexto disponível</li>
+                        <li><strong>Adicionar informações</strong> - Permite complementar os dados faltantes</li>
+                    </ul>
+                    <p>O agente <strong>não fica fazendo perguntas</strong> - apenas alerta sobre o essencial.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="App.closeHelp()">Entendi!</button>
             </div>
         </div>
     </div>

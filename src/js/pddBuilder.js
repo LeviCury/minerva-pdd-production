@@ -1,6 +1,9 @@
 /**
- * MINERVA PDD GENERATOR - PDD Builder Module
- * Constrói o documento Word do PDD a partir dos dados estruturados
+ * MINERVA PDD GENERATOR - PDD Builder Module v3.0
+ * Constrói documento Word completo e profissional do PDD
+ * 
+ * Inclui: RF (Requisitos Funcionais), RN (Regras de Negócio),
+ * INT (Integrações), Riscos, Cronograma e todas seções padrão
  */
 
 const PDDBuilder = (function() {
@@ -8,26 +11,32 @@ const PDDBuilder = (function() {
 
     const PRIMARY_COLOR = 'C41E3A';
     const SECONDARY_COLOR = '8B0000';
+    const HEADER_BG = 'F5F5F5';
 
-    /**
-     * Constrói o documento Word completo do PDD
-     */
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CONSTRUTOR PRINCIPAL
+    // ═══════════════════════════════════════════════════════════════════════════
+
     function build(pddData, options = {}) {
         const {
             incluirCapa = true,
             incluirSumario = true,
             incluirCronograma = true,
-            incluirRiscos = true
+            incluirRiscos = true,
+            incluirRequisitos = true,
+            incluirRegras = true,
+            incluirIntegracoes = true
         } = options;
 
         const children = [];
         const projectName = pddData.projeto?.nome || 'Documento de Projeto';
+        const projectCode = pddData.projeto?.nome_codigo || 'PDD-001';
 
         // ═══════════════════════════════════════════════════════════════
         // CAPA
         // ═══════════════════════════════════════════════════════════════
         if (incluirCapa) {
-            children.push(...buildCoverPage(projectName));
+            children.push(...buildCoverPage(projectName, projectCode));
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -50,31 +59,58 @@ const PDDBuilder = (function() {
         children.push(...buildExecutiveSummary(pddData));
 
         // ═══════════════════════════════════════════════════════════════
-        // 3. OBJETIVO
+        // 3. OBJETIVO E JUSTIFICATIVA
         // ═══════════════════════════════════════════════════════════════
-        children.push(...buildSection('3. OBJETIVO', 1));
+        children.push(...buildSection('3. OBJETIVO E JUSTIFICATIVA', 1));
+        children.push(...buildSection('3.1 Objetivo', 2));
         children.push(buildParagraph(pddData.projeto?.objetivo || 'A ser definido.'));
+        
+        if (pddData.projeto?.justificativa) {
+            children.push(...buildSection('3.2 Justificativa', 2));
+            children.push(buildParagraph(pddData.projeto.justificativa));
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // 4. ESCOPO
         // ═══════════════════════════════════════════════════════════════
-        children.push(...buildSection('4. ESCOPO', 1));
+        children.push(...buildSection('4. ESCOPO DO PROJETO', 1));
         children.push(...buildSection('4.1 Incluído no Escopo', 2));
-        children.push(buildParagraph(pddData.projeto?.escopo || 'A ser definido.'));
+        if (pddData.projeto?.escopo?.incluido?.length > 0) {
+            pddData.projeto.escopo.incluido.forEach(item => {
+                children.push(buildBullet(item));
+            });
+        } else {
+            children.push(buildParagraph('A ser definido.'));
+        }
         
-        if (pddData.projeto?.fora_escopo) {
+        if (pddData.projeto?.escopo?.excluido?.length > 0) {
             children.push(...buildSection('4.2 Fora do Escopo', 2));
-            children.push(buildParagraph(pddData.projeto.fora_escopo));
+            pddData.projeto.escopo.excluido.forEach(item => {
+                children.push(buildBullet(item));
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // 5. BENEFÍCIOS
+        // 5. BENEFÍCIOS ESPERADOS
         // ═══════════════════════════════════════════════════════════════
-        if (pddData.projeto?.beneficios?.length > 0) {
-            children.push(...buildSection('5. BENEFÍCIOS ESPERADOS', 1));
-            pddData.projeto.beneficios.forEach(beneficio => {
-                children.push(buildBullet(beneficio));
+        children.push(...buildSection('5. BENEFÍCIOS ESPERADOS', 1));
+        
+        if (pddData.projeto?.beneficios?.tangiveis?.length > 0) {
+            children.push(...buildSection('5.1 Benefícios Tangíveis', 2));
+            pddData.projeto.beneficios.tangiveis.forEach(b => {
+                children.push(buildBullet(b));
             });
+        }
+        
+        if (pddData.projeto?.beneficios?.intangiveis?.length > 0) {
+            children.push(...buildSection('5.2 Benefícios Intangíveis', 2));
+            pddData.projeto.beneficios.intangiveis.forEach(b => {
+                children.push(buildBullet(b));
+            });
+        }
+
+        if (!pddData.projeto?.beneficios?.tangiveis?.length && !pddData.projeto?.beneficios?.intangiveis?.length) {
+            children.push(buildParagraph('Benefícios a serem definidos durante o projeto.'));
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -97,42 +133,95 @@ const PDDBuilder = (function() {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // 8. INFRAESTRUTURA
+        // 8. REQUISITOS FUNCIONAIS
         // ═══════════════════════════════════════════════════════════════
-        children.push(...buildSection('8. INFRAESTRUTURA', 1));
+        if (incluirRequisitos && pddData.requisitos_funcionais?.length > 0) {
+            children.push(...buildSection('8. REQUISITOS FUNCIONAIS', 1));
+            children.push(...buildRequirements(pddData.requisitos_funcionais));
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 9. REGRAS DE NEGÓCIO
+        // ═══════════════════════════════════════════════════════════════
+        if (incluirRegras && pddData.regras_negocio?.length > 0) {
+            children.push(...buildSection('9. REGRAS DE NEGÓCIO', 1));
+            children.push(...buildBusinessRules(pddData.regras_negocio));
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 10. INTEGRAÇÕES
+        // ═══════════════════════════════════════════════════════════════
+        if (incluirIntegracoes && pddData.integracoes?.length > 0) {
+            children.push(...buildSection('10. INTEGRAÇÕES', 1));
+            children.push(...buildIntegrations(pddData.integracoes));
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 11. INFRAESTRUTURA
+        // ═══════════════════════════════════════════════════════════════
+        children.push(...buildSection('11. INFRAESTRUTURA', 1));
         children.push(...buildInfrastructure(pddData.infraestrutura));
 
         // ═══════════════════════════════════════════════════════════════
-        // 9. CRONOGRAMA
+        // 12. CRONOGRAMA
         // ═══════════════════════════════════════════════════════════════
-        if (incluirCronograma && pddData.cronograma?.fases?.length > 0) {
-            children.push(...buildSection('9. CRONOGRAMA', 1));
-            children.push(...buildSchedule(pddData.cronograma));
+        if (incluirCronograma) {
+            children.push(...buildSection('12. CRONOGRAMA SUGERIDO', 1));
+            children.push(...buildSchedule(pddData.cronograma_sugerido));
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // 10. RISCOS
+        // 13. ANÁLISE DE RISCOS
         // ═══════════════════════════════════════════════════════════════
-        if (incluirRiscos && pddData.riscos?.length > 0) {
-            children.push(...buildSection('10. ANÁLISE DE RISCOS', 1));
-            children.push(...buildRisks(pddData.riscos));
+        if (incluirRiscos) {
+            children.push(...buildSection('13. ANÁLISE DE RISCOS', 1));
+            children.push(...buildRisks(pddData.riscos || []));
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // 11. STAKEHOLDERS
+        // 14. STAKEHOLDERS
         // ═══════════════════════════════════════════════════════════════
-        if (pddData.stakeholders) {
-            children.push(...buildSection('11. STAKEHOLDERS', 1));
-            children.push(...buildStakeholders(pddData.stakeholders));
+        children.push(...buildSection('14. STAKEHOLDERS', 1));
+        children.push(...buildStakeholders(pddData.stakeholders));
+
+        // ═══════════════════════════════════════════════════════════════
+        // 15. PREMISSAS E RESTRIÇÕES
+        // ═══════════════════════════════════════════════════════════════
+        if ((pddData.premissas?.length > 0) || (pddData.restricoes?.length > 0)) {
+            children.push(...buildSection('15. PREMISSAS E RESTRIÇÕES', 1));
+            
+            if (pddData.premissas?.length > 0) {
+                children.push(...buildSection('15.1 Premissas', 2));
+                pddData.premissas.forEach(p => children.push(buildBullet(p)));
+            }
+            
+            if (pddData.restricoes?.length > 0) {
+                children.push(...buildSection('15.2 Restrições', 2));
+                pddData.restricoes.forEach(r => children.push(buildBullet(r)));
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // OBSERVAÇÕES
+        // 16. OBSERVAÇÕES
         // ═══════════════════════════════════════════════════════════════
         if (pddData.observacoes) {
-            children.push(...buildSection('12. OBSERVAÇÕES', 1));
+            children.push(...buildSection('16. OBSERVAÇÕES', 1));
             children.push(buildParagraph(pddData.observacoes));
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 17. GLOSSÁRIO
+        // ═══════════════════════════════════════════════════════════════
+        if (pddData.glossario?.length > 0) {
+            children.push(...buildSection('17. GLOSSÁRIO', 1));
+            children.push(...buildGlossary(pddData.glossario));
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // APROVAÇÕES
+        // ═══════════════════════════════════════════════════════════════
+        children.push(...buildSection('18. APROVAÇÕES', 1));
+        children.push(...buildApprovals(pddData));
 
         // ═══════════════════════════════════════════════════════════════
         // CRIAR DOCUMENTO
@@ -150,13 +239,29 @@ const PDDBuilder = (function() {
                         }
                     }
                 },
+                headers: {
+                    default: new docx.Header({
+                        children: [
+                            new docx.Paragraph({
+                                children: [
+                                    new docx.TextRun({ 
+                                        text: `${projectCode} | ${projectName}`, 
+                                        size: 18, 
+                                        color: "999999" 
+                                    })
+                                ],
+                                alignment: docx.AlignmentType.RIGHT
+                            })
+                        ]
+                    })
+                },
                 footers: {
                     default: new docx.Footer({
                         children: [
                             new docx.Paragraph({
                                 children: [
                                     new docx.TextRun({ 
-                                        text: `Minerva S.A. | ${projectName} | PDD`, 
+                                        text: `Minerva S.A. | Process Definition Document | Confidencial`, 
                                         size: 18, 
                                         color: "999999" 
                                     })
@@ -172,50 +277,60 @@ const PDDBuilder = (function() {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // BUILDERS DE SEÇÕES
+    // BUILDERS DE SEÇÕES ESPECÍFICAS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function buildCoverPage(projectName) {
+    function buildCoverPage(projectName, projectCode) {
         return [
-            new docx.Paragraph({ spacing: { before: 2000 } }),
+            new docx.Paragraph({ spacing: { before: 1500 } }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: "MINERVA S.A.", bold: true, size: 40, color: PRIMARY_COLOR })],
+                children: [new docx.TextRun({ text: "MINERVA S.A.", bold: true, size: 44, color: PRIMARY_COLOR })],
                 alignment: docx.AlignmentType.CENTER,
                 spacing: { after: 200 }
             }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: "━".repeat(30), color: PRIMARY_COLOR, size: 24 })],
+                children: [new docx.TextRun({ text: "━".repeat(35), color: PRIMARY_COLOR, size: 24 })],
                 alignment: docx.AlignmentType.CENTER,
-                spacing: { after: 400 }
+                spacing: { after: 500 }
             }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: "PROCESS DEFINITION DOCUMENT", bold: true, size: 28, color: "666666" })],
+                children: [new docx.TextRun({ text: "PROCESS DEFINITION DOCUMENT", bold: true, size: 32, color: "444444" })],
                 alignment: docx.AlignmentType.CENTER,
-                spacing: { after: 100 }
+                spacing: { after: 80 }
             }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: "(PDD)", size: 24, color: "666666" })],
+                children: [new docx.TextRun({ text: "(PDD)", size: 26, color: "666666" })],
                 alignment: docx.AlignmentType.CENTER,
                 spacing: { after: 600 }
             }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: projectName, bold: true, size: 56, color: PRIMARY_COLOR })],
+                children: [new docx.TextRun({ text: projectName, bold: true, size: 52, color: PRIMARY_COLOR })],
+                alignment: docx.AlignmentType.CENTER,
+                spacing: { after: 200 }
+            }),
+            new docx.Paragraph({
+                children: [new docx.TextRun({ text: projectCode, size: 28, color: "666666", italics: true })],
                 alignment: docx.AlignmentType.CENTER,
                 spacing: { after: 800 }
             }),
-            new docx.Paragraph({ spacing: { before: 1500 } }),
+            new docx.Paragraph({ spacing: { before: 1200 } }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: `Data: ${new Date().toLocaleDateString('pt-BR')}`, size: 24, color: "666666" })],
+                children: [new docx.TextRun({ text: `Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}`, size: 22, color: "666666" })],
                 alignment: docx.AlignmentType.CENTER,
                 spacing: { after: 100 }
             }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: "Versão: 1.0", size: 24, color: "666666" })],
+                children: [new docx.TextRun({ text: "Versão: 1.0", size: 22, color: "666666" })],
                 alignment: docx.AlignmentType.CENTER,
                 spacing: { after: 100 }
             }),
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: "Confidencial - Uso Interno", size: 20, color: "999999", italics: true })],
+                children: [new docx.TextRun({ text: "Status: Em Elaboração", size: 22, color: "666666" })],
+                alignment: docx.AlignmentType.CENTER,
+                spacing: { after: 300 }
+            }),
+            new docx.Paragraph({
+                children: [new docx.TextRun({ text: "CONFIDENCIAL - USO INTERNO", size: 20, color: PRIMARY_COLOR, bold: true })],
                 alignment: docx.AlignmentType.CENTER
             }),
             new docx.Paragraph({ children: [new docx.PageBreak()] })
@@ -236,25 +351,22 @@ const PDDBuilder = (function() {
     }
 
     function buildSection(title, level) {
-        const sizes = { 1: 32, 2: 26, 3: 22 };
+        const sizes = { 1: 30, 2: 24, 3: 20 };
         const headings = { 1: docx.HeadingLevel.HEADING_1, 2: docx.HeadingLevel.HEADING_2, 3: docx.HeadingLevel.HEADING_3 };
         
         const paragraph = new docx.Paragraph({
             children: [new docx.TextRun({ 
                 text: title, 
                 bold: true, 
-                size: sizes[level] || 24, 
+                size: sizes[level] || 22, 
                 color: level === 1 ? PRIMARY_COLOR : "333333" 
             })],
             heading: headings[level] || docx.HeadingLevel.HEADING_3,
-            spacing: { before: level === 1 ? 400 : 250, after: 150 }
+            spacing: { before: level === 1 ? 400 : 200, after: 120 }
         });
 
         if (level === 1) {
-            return [
-                paragraph,
-                new docx.Paragraph({ spacing: { after: 100 } })
-            ];
+            return [paragraph, new docx.Paragraph({ spacing: { after: 80 } })];
         }
         
         return [paragraph];
@@ -263,33 +375,43 @@ const PDDBuilder = (function() {
     function buildDocumentInfo(pddData) {
         const rows = [
             ['Nome do Projeto', pddData.projeto?.nome || '-'],
+            ['Código do Projeto', pddData.projeto?.nome_codigo || '-'],
             ['Data de Criação', new Date().toLocaleDateString('pt-BR')],
             ['Versão', '1.0'],
             ['Status', 'Em Elaboração'],
+            ['Complexidade', pddData.projeto?.complexidade || '-'],
+            ['Criticidade', pddData.projeto?.criticidade || '-'],
+            ['Sponsor', pddData.stakeholders?.sponsor || '-'],
+            ['Product Owner', pddData.stakeholders?.product_owner || '-'],
             ['Responsável Técnico', pddData.stakeholders?.responsavel_tecnico || '-'],
             ['Responsável Negócio', pddData.stakeholders?.responsavel_negocio || '-'],
-            ['Sponsor', pddData.stakeholders?.sponsor || '-'],
             ['Confidencialidade', 'Uso Interno']
         ];
 
-        return [buildTable(['Campo', 'Valor'], rows)];
+        return [buildTable(['Campo', 'Informação'], rows)];
     }
 
     function buildExecutiveSummary(pddData) {
+        const elements = [];
         const numRPAs = pddData.rpas?.length || 0;
         const sistemas = pddData.projeto?.sistemas_envolvidos?.join(', ') || 'N/A';
         
-        let summary = pddData.projeto?.objetivo || '';
-        
+        let summary = pddData.projeto?.objetivo || 'Objetivo a ser definido.';
+        elements.push(buildParagraph(summary));
+
         if (numRPAs > 0) {
-            summary += `\n\nA solução será composta por ${numRPAs} automação(ões) RPA:`;
-        }
+            elements.push(new docx.Paragraph({ spacing: { before: 150 } }));
+            elements.push(new docx.Paragraph({
+                children: [new docx.TextRun({ 
+                    text: `A solução será composta por ${numRPAs} automação(ões) RPA:`, 
+                    bold: true, 
+                    size: 22 
+                })],
+                spacing: { before: 100, after: 80 }
+            }));
 
-        const elements = [buildParagraph(summary)];
-
-        if (pddData.rpas?.length > 0) {
             pddData.rpas.forEach((rpa, i) => {
-                elements.push(buildBullet(`RPA ${i + 1}: ${rpa.nome || 'A definir'} - ${rpa.descricao || ''}`));
+                elements.push(buildBullet(`${rpa.codigo || 'RPA-' + (i+1).toString().padStart(3, '0')}: ${rpa.nome || 'A definir'} - ${rpa.descricao || ''}`));
             });
         }
 
@@ -298,28 +420,31 @@ const PDDBuilder = (function() {
             elements.push(buildField('Sistemas Envolvidos', sistemas));
         }
 
+        if (pddData.projeto?.areas_envolvidas?.length > 0) {
+            elements.push(buildField('Áreas Envolvidas', pddData.projeto.areas_envolvidas.join(', ')));
+        }
+
         return elements;
     }
 
     function buildArchitecture(pddData) {
         const elements = [];
 
-        // Diagrama simplificado em texto
+        // Diagrama de fluxo em texto
         if (pddData.rpas?.length > 0) {
             elements.push(new docx.Paragraph({
                 children: [new docx.TextRun({ text: 'Fluxo da Solução:', bold: true, size: 22 })],
                 spacing: { before: 100, after: 100 }
             }));
 
-            // Criar representação visual do fluxo
             let flowText = '';
             pddData.rpas.forEach((rpa, i) => {
-                flowText += `[RPA ${i + 1}: ${rpa.nome || 'RPA ' + (i + 1)}]`;
+                flowText += `[${rpa.codigo || 'RPA-' + (i+1).toString().padStart(3, '0')}: ${rpa.nome || 'RPA ' + (i + 1)}]`;
                 if (i < pddData.rpas.length - 1) flowText += ' → ';
             });
 
             elements.push(new docx.Paragraph({
-                children: [new docx.TextRun({ text: flowText, font: 'Consolas', size: 20, color: '333333' })],
+                children: [new docx.TextRun({ text: flowText, font: 'Consolas', size: 18, color: '333333' })],
                 shading: { type: docx.ShadingType.SOLID, color: 'F5F5F5' },
                 spacing: { before: 100, after: 200 },
                 alignment: docx.AlignmentType.CENTER
@@ -337,9 +462,9 @@ const PDDBuilder = (function() {
         // Bancos de dados
         if (pddData.infraestrutura?.bancos_dados?.length > 0) {
             elements.push(...buildSection('6.2 Bancos de Dados', 2));
-            const headers = ['Banco', 'Servidor', 'Função'];
+            const headers = ['Banco', 'Servidor', 'Tipo', 'Função'];
             const rows = pddData.infraestrutura.bancos_dados.map(db => [
-                db.nome || '-', db.servidor || '-', db.funcao || '-'
+                db.nome || '-', db.servidor || '-', db.tipo || '-', db.funcao || '-'
             ]);
             elements.push(buildTable(headers, rows));
         }
@@ -349,10 +474,11 @@ const PDDBuilder = (function() {
 
     function buildRPASection(rpa, numero) {
         const elements = [];
-        const rpaTitle = `7.${numero} RPA ${numero} - ${rpa.nome || 'A DEFINIR'}`;
+        const rpaCode = rpa.codigo || `RPA-${numero.toString().padStart(3, '0')}`;
+        const rpaTitle = `7.${numero} ${rpaCode} - ${rpa.nome || 'A DEFINIR'}`;
         
         elements.push(new docx.Paragraph({
-            children: [new docx.TextRun({ text: rpaTitle, bold: true, size: 28, color: PRIMARY_COLOR })],
+            children: [new docx.TextRun({ text: rpaTitle, bold: true, size: 26, color: PRIMARY_COLOR })],
             heading: docx.HeadingLevel.HEADING_2,
             spacing: { before: 350, after: 150 },
             shading: { type: docx.ShadingType.SOLID, color: 'FFF5F5' },
@@ -364,23 +490,35 @@ const PDDBuilder = (function() {
             elements.push(buildParagraph(rpa.descricao));
         }
 
+        // Objetivo
+        if (rpa.objetivo) {
+            elements.push(new docx.Paragraph({ spacing: { before: 100 } }));
+            elements.push(buildField('Objetivo', rpa.objetivo));
+        }
+
         // Tabela de configuração
         const configRows = [
-            ['Trigger', rpa.trigger || '-'],
-            ['Frequência', rpa.frequencia || '-'],
-            ['Input', Array.isArray(rpa.input) ? rpa.input.join(', ') : (rpa.input || '-')],
-            ['Output', Array.isArray(rpa.output) ? rpa.output.join(', ') : (rpa.output || '-')],
-            ['Sistemas', Array.isArray(rpa.sistemas) ? rpa.sistemas.join(', ') : (rpa.sistemas || '-')]
+            ['Código', rpaCode],
+            ['Tipo de Trigger', rpa.trigger?.tipo || '-'],
+            ['Descrição do Trigger', rpa.trigger?.descricao || '-'],
+            ['Frequência', rpa.trigger?.frequencia || '-'],
+            ['Volume Estimado', rpa.trigger?.volume_estimado || '-'],
+            ['Dados de Entrada', (rpa.entrada?.dados || []).join(', ') || '-'],
+            ['Origem dos Dados', rpa.entrada?.origem || '-'],
+            ['Dados de Saída', (rpa.saida?.dados || []).join(', ') || '-'],
+            ['Destino dos Dados', rpa.saida?.destino || '-'],
+            ['Sistemas Utilizados', (rpa.sistemas_utilizados || []).join(', ') || '-']
         ];
         
         elements.push(new docx.Paragraph({ spacing: { before: 150 } }));
         elements.push(buildTable(['Configuração', 'Valor'], configRows));
 
-        // Passos/Fluxo
-        if (rpa.passos?.length > 0) {
+        // Fluxo de Execução
+        if (rpa.fluxo_execucao?.length > 0) {
             elements.push(...buildSection(`7.${numero}.1 Fluxo de Execução`, 3));
-            rpa.passos.forEach((passo, i) => {
-                elements.push(buildNumbered(i + 1, passo));
+            rpa.fluxo_execucao.forEach((passo, i) => {
+                const texto = typeof passo === 'string' ? passo : passo.acao || passo.descricao || '';
+                elements.push(buildNumbered(i + 1, texto));
             });
         }
 
@@ -388,9 +526,187 @@ const PDDBuilder = (function() {
         if (rpa.excecoes?.length > 0) {
             elements.push(...buildSection(`7.${numero}.2 Tratamento de Exceções`, 3));
             rpa.excecoes.forEach(excecao => {
-                elements.push(buildBullet(excecao));
+                const texto = typeof excecao === 'string' ? excecao : excecao.cenario || excecao.descricao || '';
+                elements.push(buildBullet(texto));
             });
         }
+
+        // Dependências
+        if (rpa.dependencias) {
+            elements.push(...buildSection(`7.${numero}.3 Dependências`, 3));
+            if (rpa.dependencias.rpas_anteriores?.length > 0) {
+                elements.push(buildField('RPAs Anteriores', rpa.dependencias.rpas_anteriores.join(', ')));
+            }
+            if (rpa.dependencias.sistemas_obrigatorios?.length > 0) {
+                elements.push(buildField('Sistemas Obrigatórios', rpa.dependencias.sistemas_obrigatorios.join(', ')));
+            }
+        }
+
+        // Métricas
+        if (rpa.metricas) {
+            elements.push(...buildSection(`7.${numero}.4 Métricas Esperadas`, 3));
+            if (rpa.metricas.tempo_execucao_estimado) {
+                elements.push(buildField('Tempo de Execução', rpa.metricas.tempo_execucao_estimado));
+            }
+            if (rpa.metricas.volume_processamento) {
+                elements.push(buildField('Volume de Processamento', rpa.metricas.volume_processamento));
+            }
+            if (rpa.metricas.taxa_sucesso_esperada) {
+                elements.push(buildField('Taxa de Sucesso Esperada', rpa.metricas.taxa_sucesso_esperada));
+            }
+        }
+
+        return elements;
+    }
+
+    function buildRequirements(requisitos) {
+        const elements = [];
+        
+        elements.push(buildParagraph('Esta seção detalha os requisitos funcionais identificados para o projeto.'));
+        elements.push(new docx.Paragraph({ spacing: { after: 150 } }));
+
+        // Tabela resumo
+        const headers = ['Código', 'Título', 'Prioridade', 'Complexidade'];
+        const rows = requisitos.map(rf => [
+            rf.codigo || '-',
+            rf.titulo || '-',
+            rf.prioridade || 'SHOULD',
+            rf.complexidade || 'MEDIA'
+        ]);
+        elements.push(buildTable(headers, rows));
+        elements.push(new docx.Paragraph({ spacing: { after: 200 } }));
+
+        // Detalhamento
+        requisitos.forEach((rf, i) => {
+            elements.push(new docx.Paragraph({
+                children: [
+                    new docx.TextRun({ text: `${rf.codigo || 'RF-' + (i+1).toString().padStart(3, '0')}: `, bold: true, color: PRIMARY_COLOR, size: 22 }),
+                    new docx.TextRun({ text: rf.titulo || 'Sem título', bold: true, size: 22 })
+                ],
+                spacing: { before: 200, after: 80 }
+            }));
+
+            if (rf.descricao) {
+                elements.push(buildParagraph(rf.descricao));
+            }
+
+            if (rf.fluxo_principal?.length > 0) {
+                elements.push(new docx.Paragraph({
+                    children: [new docx.TextRun({ text: 'Fluxo Principal:', bold: true, size: 20 })],
+                    spacing: { before: 80, after: 40 }
+                }));
+                rf.fluxo_principal.forEach((passo, j) => {
+                    elements.push(buildNumbered(j + 1, passo));
+                });
+            }
+
+            if (rf.criterios_aceitacao?.length > 0) {
+                elements.push(new docx.Paragraph({
+                    children: [new docx.TextRun({ text: 'Critérios de Aceitação:', bold: true, size: 20 })],
+                    spacing: { before: 80, after: 40 }
+                }));
+                rf.criterios_aceitacao.forEach(criterio => {
+                    elements.push(buildBullet(criterio));
+                });
+            }
+        });
+
+        return elements;
+    }
+
+    function buildBusinessRules(regras) {
+        const elements = [];
+        
+        elements.push(buildParagraph('Esta seção documenta as regras de negócio que governam o comportamento do sistema.'));
+        elements.push(new docx.Paragraph({ spacing: { after: 150 } }));
+
+        // Tabela resumo
+        const headers = ['Código', 'Tipo', 'Título'];
+        const rows = regras.map(rn => [
+            rn.codigo || '-',
+            rn.tipo || 'VAL',
+            rn.titulo || rn.descricao?.substring(0, 50) || '-'
+        ]);
+        elements.push(buildTable(headers, rows));
+        elements.push(new docx.Paragraph({ spacing: { after: 200 } }));
+
+        // Detalhamento
+        regras.forEach((rn, i) => {
+            elements.push(new docx.Paragraph({
+                children: [
+                    new docx.TextRun({ text: `${rn.codigo || 'RN-' + (i+1).toString().padStart(3, '0')} `, bold: true, color: PRIMARY_COLOR, size: 22 }),
+                    new docx.TextRun({ text: `[${rn.tipo || 'VAL'}] `, size: 20, color: '666666' }),
+                    new docx.TextRun({ text: rn.titulo || '', bold: true, size: 22 })
+                ],
+                spacing: { before: 200, after: 80 }
+            }));
+
+            if (rn.descricao) {
+                elements.push(buildParagraph(rn.descricao));
+            }
+
+            if (rn.logica) {
+                elements.push(new docx.Paragraph({
+                    children: [new docx.TextRun({ text: rn.logica, font: 'Consolas', size: 18 })],
+                    shading: { type: docx.ShadingType.SOLID, color: 'F5F5F5' },
+                    spacing: { before: 60, after: 60 }
+                }));
+            }
+
+            if (rn.exemplos?.length > 0) {
+                elements.push(new docx.Paragraph({
+                    children: [new docx.TextRun({ text: 'Exemplos:', bold: true, size: 20 })],
+                    spacing: { before: 60, after: 40 }
+                }));
+                rn.exemplos.forEach(ex => {
+                    elements.push(buildBullet(`${ex.cenario}: ${ex.resultado || ''}`));
+                });
+            }
+        });
+
+        return elements;
+    }
+
+    function buildIntegrations(integracoes) {
+        const elements = [];
+        
+        elements.push(buildParagraph('Esta seção descreve as integrações com sistemas externos necessárias para a solução.'));
+        elements.push(new docx.Paragraph({ spacing: { after: 150 } }));
+
+        // Tabela resumo
+        const headers = ['Código', 'Sistema', 'Direção', 'Protocolo', 'Frequência'];
+        const rows = integracoes.map(int => [
+            int.codigo || '-',
+            int.sistema_externo || '-',
+            int.direcao || '-',
+            int.protocolo || '-',
+            int.frequencia || '-'
+        ]);
+        elements.push(buildTable(headers, rows));
+        elements.push(new docx.Paragraph({ spacing: { after: 200 } }));
+
+        // Detalhamento
+        integracoes.forEach((int, i) => {
+            elements.push(new docx.Paragraph({
+                children: [
+                    new docx.TextRun({ text: `${int.codigo || 'INT-' + (i+1).toString().padStart(3, '0')}: `, bold: true, color: PRIMARY_COLOR, size: 22 }),
+                    new docx.TextRun({ text: int.sistema_externo || 'Sistema', bold: true, size: 22 })
+                ],
+                spacing: { before: 200, after: 80 }
+            }));
+
+            if (int.proposito) {
+                elements.push(buildField('Propósito', int.proposito));
+            }
+
+            if (int.dados_trafegados?.length > 0) {
+                elements.push(buildField('Dados Trafegados', int.dados_trafegados.join(', ')));
+            }
+
+            if (int.tratamento_erros) {
+                elements.push(buildField('Tratamento de Erros', int.tratamento_erros));
+            }
+        });
 
         return elements;
     }
@@ -400,50 +716,152 @@ const PDDBuilder = (function() {
 
         // Servidores
         if (infra?.servidores?.length > 0) {
-            elements.push(...buildSection('8.1 Servidores', 2));
-            const headers = ['Servidor', 'Função'];
-            const rows = infra.servidores.map(s => [s.nome || '-', s.funcao || '-']);
+            elements.push(...buildSection('11.1 Servidores', 2));
+            const headers = ['Servidor', 'Tipo', 'Função'];
+            const rows = infra.servidores.map(s => [s.nome || '-', s.tipo || '-', s.funcao || '-']);
+            elements.push(buildTable(headers, rows));
+        }
+
+        // Bancos
+        if (infra?.bancos_dados?.length > 0) {
+            elements.push(...buildSection('11.2 Bancos de Dados', 2));
+            const headers = ['Banco', 'Servidor', 'Tipo', 'Função'];
+            const rows = infra.bancos_dados.map(b => [b.nome || '-', b.servidor || '-', b.tipo || '-', b.funcao || '-']);
             elements.push(buildTable(headers, rows));
         }
 
         // Tecnologias
         if (infra?.tecnologias?.length > 0) {
-            elements.push(...buildSection('8.2 Tecnologias Utilizadas', 2));
+            elements.push(...buildSection('11.3 Tecnologias Utilizadas', 2));
             infra.tecnologias.forEach(tech => {
                 elements.push(buildBullet(tech));
             });
         }
 
+        // Requisitos de Ambiente
+        if (infra?.requisitos_ambiente?.length > 0) {
+            elements.push(...buildSection('11.4 Requisitos de Ambiente', 2));
+            infra.requisitos_ambiente.forEach(req => {
+                elements.push(buildBullet(req));
+            });
+        }
+
         if (!infra?.servidores?.length && !infra?.tecnologias?.length) {
-            elements.push(buildParagraph('A ser definido durante o desenvolvimento.'));
+            elements.push(buildParagraph('Infraestrutura a ser definida durante o desenvolvimento.'));
         }
 
         return elements;
     }
 
     function buildSchedule(cronograma) {
-        const headers = ['Fase', 'Duração Estimada'];
-        const rows = cronograma.fases.map(f => [f.fase || '-', f.duracao_estimada || '-']);
-        return [buildTable(headers, rows)];
+        const elements = [];
+
+        if (cronograma?.fases?.length > 0) {
+            const headers = ['Fase', 'Duração Estimada', 'Entregas'];
+            const rows = cronograma.fases.map(f => [
+                f.fase || '-', 
+                f.duracao_estimada || '-',
+                (f.entregas || []).join(', ') || '-'
+            ]);
+            elements.push(buildTable(headers, rows));
+
+            if (cronograma.marcos_principais?.length > 0) {
+                elements.push(new docx.Paragraph({ spacing: { before: 150 } }));
+                elements.push(new docx.Paragraph({
+                    children: [new docx.TextRun({ text: 'Marcos Principais:', bold: true, size: 22 })],
+                    spacing: { after: 80 }
+                }));
+                cronograma.marcos_principais.forEach(marco => {
+                    elements.push(buildBullet(`${marco.marco}: ${marco.criterio_conclusao || ''}`));
+                });
+            }
+        } else {
+            // Cronograma padrão
+            const defaultRows = [
+                ['Desenvolvimento', '4-6 semanas', 'Código desenvolvido e testado unitariamente'],
+                ['Testes Integrados', '1-2 semanas', 'Testes de integração e performance'],
+                ['Homologação (UAT)', '1-2 semanas', 'Validação com usuários de negócio'],
+                ['Implantação', '1 semana', 'Deploy em produção e go-live']
+            ];
+            elements.push(buildTable(['Fase', 'Duração Estimada', 'Entregas'], defaultRows));
+            elements.push(new docx.Paragraph({ spacing: { before: 100 } }));
+            elements.push(new docx.Paragraph({
+                children: [new docx.TextRun({ text: 'Nota: Cronograma sugerido, sujeito a ajustes conforme complexidade identificada.', italics: true, size: 20, color: '666666' })]
+            }));
+        }
+
+        return elements;
     }
 
     function buildRisks(riscos) {
-        const headers = ['Risco', 'Mitigação'];
-        const rows = riscos.map(r => [r.risco || '-', r.mitigacao || '-']);
-        return [buildTable(headers, rows)];
+        const elements = [];
+
+        if (riscos?.length > 0) {
+            const headers = ['Código', 'Risco', 'Prob.', 'Impacto', 'Mitigação'];
+            const rows = riscos.map((r, i) => [
+                r.codigo || `RISK-${(i+1).toString().padStart(3, '0')}`,
+                r.descricao || '-',
+                r.probabilidade || 'MEDIA',
+                r.impacto || 'MEDIO',
+                r.mitigacao || '-'
+            ]);
+            elements.push(buildTable(headers, rows));
+        } else {
+            // Riscos padrão
+            const defaultRisks = [
+                ['RISK-001', 'Indisponibilidade de sistemas integrados', 'MEDIA', 'ALTO', 'Implementar retry com backoff e alertas'],
+                ['RISK-002', 'Mudança de layout/estrutura dos sistemas fonte', 'MEDIA', 'ALTO', 'Monitoramento proativo e versionamento'],
+                ['RISK-003', 'Volume de dados acima do esperado', 'BAIXA', 'MEDIO', 'Processamento em lotes e escalabilidade'],
+                ['RISK-004', 'Falha de conectividade de rede', 'BAIXA', 'ALTO', 'Redundância e tratamento de timeout']
+            ];
+            elements.push(buildTable(['Código', 'Risco', 'Prob.', 'Impacto', 'Mitigação'], defaultRisks));
+        }
+
+        return elements;
     }
 
     function buildStakeholders(stakeholders) {
         const rows = [];
-        if (stakeholders.sponsor) rows.push(['Sponsor', stakeholders.sponsor]);
-        if (stakeholders.responsavel_negocio) rows.push(['Responsável Negócio', stakeholders.responsavel_negocio]);
-        if (stakeholders.responsavel_tecnico) rows.push(['Responsável Técnico', stakeholders.responsavel_tecnico]);
         
-        if (rows.length === 0) {
-            return [buildParagraph('A ser definido.')];
+        if (stakeholders?.sponsor) rows.push(['Sponsor', stakeholders.sponsor, 'Patrocinador do projeto']);
+        if (stakeholders?.product_owner) rows.push(['Product Owner', stakeholders.product_owner, 'Dono do produto/processo']);
+        if (stakeholders?.responsavel_negocio) rows.push(['Responsável Negócio', stakeholders.responsavel_negocio, 'Ponto focal da área de negócio']);
+        if (stakeholders?.responsavel_tecnico) rows.push(['Responsável Técnico', stakeholders.responsavel_tecnico, 'Ponto focal técnico']);
+        
+        if (stakeholders?.usuarios_finais?.length > 0) {
+            rows.push(['Usuários Finais', stakeholders.usuarios_finais.join(', '), 'Usuários que utilizarão a solução']);
         }
         
-        return [buildTable(['Papel', 'Nome/Área'], rows)];
+        if (stakeholders?.areas_impactadas?.length > 0) {
+            rows.push(['Áreas Impactadas', stakeholders.areas_impactadas.join(', '), 'Áreas afetadas pelo projeto']);
+        }
+        
+        if (rows.length === 0) {
+            return [buildParagraph('Stakeholders a serem definidos.')];
+        }
+        
+        return [buildTable(['Papel', 'Nome/Área', 'Responsabilidade'], rows)];
+    }
+
+    function buildGlossary(glossario) {
+        const headers = ['Termo', 'Definição'];
+        const rows = glossario.map(g => [g.termo || '-', g.definicao || '-']);
+        return [buildTable(headers, rows)];
+    }
+
+    function buildApprovals(pddData) {
+        const rows = [
+            ['Sponsor', pddData.stakeholders?.sponsor || '_________________', '', '___/___/______'],
+            ['Responsável Negócio', pddData.stakeholders?.responsavel_negocio || '_________________', '', '___/___/______'],
+            ['Responsável Técnico', pddData.stakeholders?.responsavel_tecnico || '_________________', '', '___/___/______'],
+            ['Gerente de Projeto', '_________________', '', '___/___/______']
+        ];
+
+        return [
+            buildParagraph('As assinaturas abaixo confirmam a revisão e aprovação deste documento.'),
+            new docx.Paragraph({ spacing: { after: 150 } }),
+            buildTable(['Papel', 'Nome', 'Assinatura', 'Data'], rows)
+        ];
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -453,7 +871,7 @@ const PDDBuilder = (function() {
     function buildParagraph(text) {
         return new docx.Paragraph({
             children: [new docx.TextRun({ text: text || '', size: 22 })],
-            spacing: { before: 80, after: 80 },
+            spacing: { before: 60, after: 60 },
             alignment: docx.AlignmentType.JUSTIFIED
         });
     }
@@ -464,7 +882,7 @@ const PDDBuilder = (function() {
                 new docx.TextRun({ text: "• ", color: PRIMARY_COLOR, size: 22 }),
                 new docx.TextRun({ text: text || '', size: 22 })
             ],
-            spacing: { before: 50, after: 50 },
+            spacing: { before: 40, after: 40 },
             indent: { left: docx.convertInchesToTwip(0.25) }
         });
     }
@@ -475,7 +893,7 @@ const PDDBuilder = (function() {
                 new docx.TextRun({ text: `${num}. `, bold: true, color: PRIMARY_COLOR, size: 22 }),
                 new docx.TextRun({ text: text || '', size: 22 })
             ],
-            spacing: { before: 50, after: 50 },
+            spacing: { before: 40, after: 40 },
             indent: { left: docx.convertInchesToTwip(0.25) }
         });
     }
@@ -486,7 +904,7 @@ const PDDBuilder = (function() {
                 new docx.TextRun({ text: `${key}: `, bold: true, size: 22, color: PRIMARY_COLOR }),
                 new docx.TextRun({ text: value || '', size: 22 })
             ],
-            spacing: { before: 60, after: 60 }
+            spacing: { before: 50, after: 50 }
         });
     }
 
@@ -498,11 +916,11 @@ const PDDBuilder = (function() {
             children: headers.map(h => new docx.TableCell({
                 children: [new docx.Paragraph({
                     children: [new docx.TextRun({ text: h, bold: true, color: "FFFFFF", size: 20 })],
-                    spacing: { before: 60, after: 60 }
+                    spacing: { before: 50, after: 50 }
                 })],
                 shading: { type: docx.ShadingType.SOLID, color: PRIMARY_COLOR },
                 verticalAlign: docx.VerticalAlign.CENTER,
-                margins: { top: 80, bottom: 80, left: 120, right: 120 }
+                margins: { top: 60, bottom: 60, left: 100, right: 100 }
             })),
             tableHeader: true
         }));
@@ -513,10 +931,10 @@ const PDDBuilder = (function() {
                 children: row.map(cell => new docx.TableCell({
                     children: [new docx.Paragraph({
                         children: [new docx.TextRun({ text: String(cell || ''), size: 20 })],
-                        spacing: { before: 40, after: 40 }
+                        spacing: { before: 30, after: 30 }
                     })],
                     shading: idx % 2 === 0 ? { type: docx.ShadingType.SOLID, color: "F9F9F9" } : undefined,
-                    margins: { top: 60, bottom: 60, left: 120, right: 120 }
+                    margins: { top: 50, bottom: 50, left: 100, right: 100 }
                 }))
             }));
         });
@@ -541,7 +959,7 @@ const PDDBuilder = (function() {
                     basedOn: "Normal",
                     next: "Normal",
                     quickFormat: true,
-                    run: { size: 32, bold: true, color: PRIMARY_COLOR }
+                    run: { size: 30, bold: true, color: PRIMARY_COLOR }
                 },
                 {
                     id: "Heading2",
@@ -549,7 +967,7 @@ const PDDBuilder = (function() {
                     basedOn: "Normal",
                     next: "Normal",
                     quickFormat: true,
-                    run: { size: 26, bold: true }
+                    run: { size: 24, bold: true }
                 },
                 {
                     id: "Heading3",
@@ -557,11 +975,15 @@ const PDDBuilder = (function() {
                     basedOn: "Normal",
                     next: "Normal",
                     quickFormat: true,
-                    run: { size: 22, bold: true, italics: true }
+                    run: { size: 20, bold: true, italics: true }
                 }
             ]
         };
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // API PÚBLICA
+    // ═══════════════════════════════════════════════════════════════════════════
 
     return {
         build
