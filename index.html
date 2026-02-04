@@ -14,6 +14,21 @@
     <!-- Libraries -->
     <script src="https://unpkg.com/docx@8.2.2/build/index.umd.js"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: false, 
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#C41E3A',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#8B0000',
+                lineColor: '#666',
+                secondaryColor: '#f5f5f5',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
     
     <!-- Styles -->
     <link rel="stylesheet" href="src/css/styles.css">
@@ -141,6 +156,8 @@ Inclua informações como:
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="App.closeReview()">Cancelar</button>
+                <button class="btn-secondary" onclick="App.validatePDD()">✅ Validar</button>
+                <button class="btn-secondary" onclick="App.showDiagrams()">📊 Ver Diagramas</button>
                 <button class="btn-primary btn-large" onclick="App.generateDocument()">
                     📄 Baixar PDD (.docx)
                 </button>
@@ -217,6 +234,45 @@ Inclua informações como:
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
+         DIAGRAMS MODAL - Modal de Diagramas
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="diagramsModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📊 Diagramas do Projeto</h2>
+                <button class="modal-close" onclick="App.closeDiagrams()">×</button>
+            </div>
+            <div class="modal-body" id="diagramsContent">
+                <!-- Diagramas gerados dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="App.closeDiagrams()">Fechar</button>
+                <button class="btn-primary" onclick="App.exportAllDiagrams()">
+                    📥 Exportar Diagramas
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         VALIDATION MODAL - Modal de Validação
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="validationModal" class="modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2>✅ Validação do PDD</h2>
+                <button class="modal-close" onclick="App.closeValidation()">×</button>
+            </div>
+            <div class="modal-body" id="validationContent">
+                <!-- Resultado da validação -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="App.closeValidation()">Entendi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
          LOADING
          ═══════════════════════════════════════════════════════════════════════ -->
     <div id="loading" class="loading">
@@ -236,6 +292,8 @@ Inclua informações como:
          SCRIPTS
          ═══════════════════════════════════════════════════════════════════════ -->
     <script src="src/js/aiAnalyzer.js"></script>
+    <script src="src/js/schemaValidator.js"></script>
+    <script src="src/js/diagramGenerator.js"></script>
     <script src="src/js/pddBuilder.js"></script>
     <script src="src/js/app.js"></script>
 </body>

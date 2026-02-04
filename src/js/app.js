@@ -929,6 +929,215 @@ const App = (function() {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // VALIDAÇÃO DO PDD
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function validatePDD() {
+        if (!state.pddData) {
+            showToast('Analise um projeto primeiro', 'error');
+            return;
+        }
+
+        const result = SchemaValidator.validate(state.pddData);
+        showValidationResult(result);
+    }
+
+    function showValidationResult(result) {
+        const modal = document.getElementById('validationModal');
+        const content = document.getElementById('validationContent');
+        
+        if (!modal || !content) return;
+
+        const completudeClass = result.stats.completude >= 80 ? 'high' : 
+                                result.stats.completude >= 60 ? 'medium' : 'low';
+
+        let html = `
+            <div class="validation-summary">
+                <div class="validation-status ${result.valid ? 'valid' : 'invalid'}">
+                    ${result.valid ? '✅ PDD Válido' : '❌ PDD com Problemas'}
+                </div>
+                <div class="completude-meter">
+                    <div class="completude-label">Completude: ${result.stats.completude}%</div>
+                    <div class="completude-bar">
+                        <div class="completude-fill ${completudeClass}" style="width: ${result.stats.completude}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="validation-stats">
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <span class="stat-num">${result.stats.rpas}</span>
+                        <span class="stat-text">RPAs</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">${result.stats.requisitos}</span>
+                        <span class="stat-text">Requisitos</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">${result.stats.regras}</span>
+                        <span class="stat-text">Regras</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">${result.stats.integracoes}</span>
+                        <span class="stat-text">Integrações</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">${result.stats.riscos}</span>
+                        <span class="stat-text">Riscos</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (result.errors.length > 0) {
+            html += `
+                <div class="validation-section errors">
+                    <h4>❌ Erros (${result.errors.length})</h4>
+                    <ul>
+                        ${result.errors.map(e => `<li><strong>${e.path}:</strong> ${e.message}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        if (result.warnings.length > 0) {
+            html += `
+                <div class="validation-section warnings">
+                    <h4>⚠️ Avisos (${result.warnings.length})</h4>
+                    <ul>
+                        ${result.warnings.map(w => `<li><strong>${w.path}:</strong> ${w.message}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        if (result.errors.length === 0 && result.warnings.length === 0) {
+            html += `
+                <div class="validation-section success">
+                    <h4>🎉 Excelente!</h4>
+                    <p>O PDD está completo e bem estruturado. Pronto para gerar o documento.</p>
+                </div>
+            `;
+        }
+
+        content.innerHTML = html;
+        modal.classList.add('active');
+    }
+
+    function closeValidation() {
+        const modal = document.getElementById('validationModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DIAGRAMAS MERMAID
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    async function showDiagrams() {
+        if (!state.pddData) {
+            showToast('Analise um projeto primeiro', 'error');
+            return;
+        }
+
+        const modal = document.getElementById('diagramsModal');
+        const content = document.getElementById('diagramsContent');
+        
+        if (!modal || !content) return;
+
+        showLoading('📊 Gerando Diagramas', 'Criando visualizações do projeto...');
+
+        try {
+            const diagrams = DiagramGenerator.generateAllDiagrams(state.pddData);
+            
+            let html = '<div class="diagrams-container">';
+            
+            diagrams.forEach((diagram, i) => {
+                html += `
+                    <div class="diagram-card">
+                        <div class="diagram-header">
+                            <h3>${diagram.title}</h3>
+                            <div class="diagram-actions">
+                                <button class="btn-small" onclick="App.copyDiagramCode(${i})">📋 Copiar Código</button>
+                            </div>
+                        </div>
+                        <div class="diagram-content" id="diagram-${i}">
+                            <div class="diagram-loading">Renderizando...</div>
+                        </div>
+                        <details class="diagram-code">
+                            <summary>Ver código Mermaid</summary>
+                            <pre id="diagram-code-${i}">${escapeHtml(diagram.mermaid)}</pre>
+                        </details>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            content.innerHTML = html;
+            modal.classList.add('active');
+            hideLoading();
+
+            // Renderizar cada diagrama
+            for (let i = 0; i < diagrams.length; i++) {
+                const container = document.getElementById(`diagram-${i}`);
+                if (container) {
+                    await DiagramGenerator.renderDiagram(container, diagrams[i].mermaid, `mermaid-${i}`);
+                }
+            }
+
+            // Salvar diagramas no state para exportação
+            state.diagrams = diagrams;
+
+        } catch (error) {
+            console.error('Erro ao gerar diagramas:', error);
+            hideLoading();
+            showToast('Erro ao gerar diagramas: ' + error.message, 'error');
+        }
+    }
+
+    function closeDiagrams() {
+        const modal = document.getElementById('diagramsModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    function copyDiagramCode(index) {
+        if (!state.diagrams || !state.diagrams[index]) return;
+        
+        const code = state.diagrams[index].mermaid;
+        navigator.clipboard.writeText(code).then(() => {
+            showToast('Código Mermaid copiado!', 'success');
+        }).catch(() => {
+            showToast('Erro ao copiar', 'error');
+        });
+    }
+
+    async function exportAllDiagrams() {
+        if (!state.diagrams || state.diagrams.length === 0) {
+            showToast('Nenhum diagrama para exportar', 'error');
+            return;
+        }
+
+        showToast('Exportando diagramas...', 'info');
+
+        // Criar um arquivo de texto com todos os códigos Mermaid
+        let content = `# Diagramas do Projeto: ${state.pddData?.projeto?.nome || 'PDD'}\n`;
+        content += `# Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
+
+        state.diagrams.forEach((diagram, i) => {
+            content += `## ${diagram.title}\n\n`;
+            content += '```mermaid\n';
+            content += diagram.mermaid;
+            content += '\n```\n\n';
+        });
+
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const fileName = `Diagramas_${state.pddData?.projeto?.nome?.replace(/[^a-zA-Z0-9]/g, '_') || 'PDD'}.md`;
+        saveAs(blob, fileName);
+
+        showToast('Diagramas exportados como Markdown!', 'success');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // API PÚBLICA
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -946,7 +1155,14 @@ const App = (function() {
         hideGapInputs,
         submitGapInputs,
         toggleSection,
-        closeAllModals
+        closeAllModals,
+        // Novas funções
+        validatePDD,
+        closeValidation,
+        showDiagrams,
+        closeDiagrams,
+        copyDiagramCode,
+        exportAllDiagrams
     };
 
 })();

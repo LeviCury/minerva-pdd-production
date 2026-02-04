@@ -1095,3 +1095,255 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VALIDATION MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.validation-summary {
+    text-align: center;
+    padding: 20px;
+    margin-bottom: 20px;
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+}
+
+.validation-status {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.validation-status.valid {
+    color: var(--success);
+}
+
+.validation-status.invalid {
+    color: var(--error);
+}
+
+.completude-meter {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.completude-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.completude-bar {
+    height: 12px;
+    background: var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.completude-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+
+.completude-fill.high {
+    background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.completude-fill.medium {
+    background: linear-gradient(90deg, #ffc107, #fd7e14);
+}
+
+.completude-fill.low {
+    background: linear-gradient(90deg, #dc3545, #e74c3c);
+}
+
+.validation-stats {
+    margin-bottom: 20px;
+}
+
+.stat-grid {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    text-align: center;
+    min-width: 80px;
+}
+
+.stat-num {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--minerva);
+}
+
+.stat-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.validation-section {
+    margin-bottom: 16px;
+    padding: 16px;
+    border-radius: var(--radius);
+}
+
+.validation-section.errors {
+    background: #fff5f5;
+    border: 1px solid #ffcccc;
+}
+
+.validation-section.warnings {
+    background: #fffbeb;
+    border: 1px solid #ffeaa7;
+}
+
+.validation-section.success {
+    background: #f0fff4;
+    border: 1px solid #9ae6b4;
+}
+
+.validation-section h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.validation-section ul {
+    list-style: none;
+    padding: 0;
+}
+
+.validation-section li {
+    font-size: 0.85rem;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.validation-section li:last-child {
+    border-bottom: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DIAGRAMS MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.diagrams-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.diagram-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.diagram-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+}
+
+.diagram-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-small:hover {
+    background: var(--minerva);
+    color: white;
+    border-color: var(--minerva);
+}
+
+.diagram-content {
+    padding: 20px;
+    background: white;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: auto;
+}
+
+.diagram-content svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.diagram-loading {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.diagram-code {
+    border-top: 1px solid var(--border);
+}
+
+.diagram-code summary {
+    padding: 12px 20px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    background: var(--bg);
+    transition: var(--transition);
+}
+
+.diagram-code summary:hover {
+    background: #eee;
+}
+
+.diagram-code pre {
+    margin: 0;
+    padding: 16px 20px;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.mermaid-error {
+    background: #fff5f5;
+    color: var(--error);
+    padding: 16px;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+}
