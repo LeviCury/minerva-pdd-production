@@ -1137,6 +1137,40 @@ const App = (function() {
         showToast('Diagramas exportados como Markdown!', 'success');
     }
 
+    async function exportDiagramsAsPNG() {
+        if (!state.pddData) {
+            showToast('Analise um projeto primeiro', 'error');
+            return;
+        }
+
+        showLoading('📸 Exportando Imagens', 'Gerando PNGs dos diagramas...');
+
+        try {
+            const projectName = state.pddData?.projeto?.nome || 'PDD';
+            const images = await DiagramGenerator.exportAllAsPNG(state.pddData, projectName);
+
+            if (images.length === 0) {
+                hideLoading();
+                showToast('Nenhum diagrama para exportar', 'warning');
+                return;
+            }
+
+            // Baixar cada imagem
+            for (const img of images) {
+                DiagramGenerator.downloadImage(img.data, img.name);
+                await new Promise(r => setTimeout(r, 500)); // Delay entre downloads
+            }
+
+            hideLoading();
+            showToast(`${images.length} diagrama(s) exportado(s) como PNG!`, 'success');
+
+        } catch (error) {
+            console.error('Erro ao exportar diagramas:', error);
+            hideLoading();
+            showToast('Erro ao exportar diagramas: ' + error.message, 'error');
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // API PÚBLICA
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1162,7 +1196,8 @@ const App = (function() {
         showDiagrams,
         closeDiagrams,
         copyDiagramCode,
-        exportAllDiagrams
+        exportAllDiagrams,
+        exportDiagramsAsPNG
     };
 
 })();

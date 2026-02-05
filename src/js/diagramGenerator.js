@@ -452,6 +452,148 @@ const DiagramGenerator = (function() {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // RENDERIZAÇÃO PARA WORD/EXPORTAÇÃO
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Renderiza um diagrama e retorna como base64 PNG
+     * Para uso no Word document
+     */
+    async function renderToBase64(mermaidCode, width = 800) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                // Criar container temporário
+                const tempContainer = document.createElement('div');
+                tempContainer.style.position = 'absolute';
+                tempContainer.style.left = '-9999px';
+                tempContainer.style.top = '-9999px';
+                document.body.appendChild(tempContainer);
+
+                // Renderizar o diagrama
+                const id = `temp-diagram-${Date.now()}`;
+                const { svg } = await mermaid.render(id, mermaidCode);
+                tempContainer.innerHTML = svg;
+
+                const svgElement = tempContainer.querySelector('svg');
+                if (!svgElement) {
+                    document.body.removeChild(tempContainer);
+                    resolve(null);
+                    return;
+                }
+
+                // Obter dimensões
+                const bbox = svgElement.getBBox();
+                const svgWidth = bbox.width || 800;
+                const svgHeight = bbox.height || 400;
+
+                // Criar canvas
+                const canvas = document.createElement('canvas');
+                const scale = width / svgWidth;
+                canvas.width = width;
+                canvas.height = svgHeight * scale;
+                const ctx = canvas.getContext('2d');
+
+                // Fundo branco
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Converter SVG para imagem
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(url);
+                    document.body.removeChild(tempContainer);
+                    
+                    // Retornar base64
+                    const base64 = canvas.toDataURL('image/png').split(',')[1];
+                    resolve({
+                        base64: base64,
+                        width: canvas.width,
+                        height: canvas.height
+                    });
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    document.body.removeChild(tempContainer);
+                    resolve(null);
+                };
+                img.src = url;
+
+            } catch (e) {
+                console.error('Erro ao renderizar diagrama:', e);
+                resolve(null);
+            }
+        });
+    }
+
+    /**
+     * Renderiza todos os diagramas como base64 para o Word
+     */
+    async function renderAllForWord(pddData) {
+        const diagrams = generateAllDiagrams(pddData);
+        const rendered = [];
+
+        for (const diagram of diagrams) {
+            try {
+                const result = await renderToBase64(diagram.mermaid, 700);
+                if (result) {
+                    rendered.push({
+                        title: diagram.title,
+                        type: diagram.type,
+                        ...result
+                    });
+                }
+            } catch (e) {
+                console.warn(`Não foi possível renderizar: ${diagram.title}`, e);
+            }
+        }
+
+        return rendered;
+    }
+
+    /**
+     * Exporta todos os diagramas como um ZIP de PNGs
+     */
+    async function exportAllAsPNG(pddData, projectName = 'PDD') {
+        const diagrams = generateAllDiagrams(pddData);
+        const images = [];
+
+        for (let i = 0; i < diagrams.length; i++) {
+            const diagram = diagrams[i];
+            try {
+                const result = await renderToBase64(diagram.mermaid, 1200);
+                if (result) {
+                    images.push({
+                        name: `${i + 1}_${diagram.type}_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+                        title: diagram.title,
+                        data: result.base64
+                    });
+                }
+            } catch (e) {
+                console.warn(`Erro ao exportar: ${diagram.title}`, e);
+            }
+        }
+
+        return images;
+    }
+
+    /**
+     * Download de uma imagem específica
+     */
+    function downloadImage(base64Data, filename) {
+        const link = document.createElement('a');
+        link.href = 'data:image/png;base64,' + base64Data;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // API PÚBLICA
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -464,7 +606,12 @@ const DiagramGenerator = (function() {
         generateTimelineDiagram,
         renderDiagram,
         exportAsSVG,
-        exportAsPNG
+        exportAsPNG,
+        // Novas funções para Word/Export
+        renderToBase64,
+        renderAllForWord,
+        exportAllAsPNG,
+        downloadImage
     };
 
 })();

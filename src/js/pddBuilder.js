@@ -13,7 +13,7 @@ const PDDBuilder = (function() {
             PageBreak, Header, Footer, PageNumber, NumberFormat,
             TableOfContents, StyleLevel, ShadingType, VerticalAlign,
             convertInchesToTwip, PageOrientation, LevelFormat,
-            SectionType, TabStopType, TabStopPosition } = docx;
+            SectionType, TabStopType, TabStopPosition, ImageRun } = docx;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PALETA DE CORES MINERVA
@@ -77,6 +77,16 @@ const PDDBuilder = (function() {
     // ═══════════════════════════════════════════════════════════════════════════
 
     async function build(pddData, options = {}) {
+        // Gerar diagramas se solicitado
+        let diagramImages = [];
+        if (options.incluirDiagramas !== false && typeof DiagramGenerator !== 'undefined') {
+            try {
+                diagramImages = await DiagramGenerator.renderAllForWord(pddData);
+            } catch (e) {
+                console.warn('Não foi possível gerar diagramas:', e);
+            }
+        }
+
         const doc = new Document({
             creator: 'Minerva PDD Generator',
             title: pddData.projeto?.nome || 'Documento de Escopo PDD',
@@ -90,7 +100,7 @@ const PDDBuilder = (function() {
                 buildPreTextualSection(pddData),
                 
                 // SEÇÃO 2: CORPO DO DOCUMENTO
-                buildMainSection(pddData, options)
+                buildMainSection(pddData, options, diagramImages)
             ]
         });
 
@@ -612,7 +622,7 @@ const PDDBuilder = (function() {
     // SEÇÃO 2: CORPO DO DOCUMENTO
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function buildMainSection(pddData, options) {
+    function buildMainSection(pddData, options, diagramImages = []) {
         const children = [];
         let sectionNum = 1;
 
@@ -662,7 +672,13 @@ const PDDBuilder = (function() {
         children.push(...buildPremissasSection(pddData, sectionNum++));
         children.push(new Paragraph({ children: [new PageBreak()] }));
 
-        // 11. GLOSSÁRIO
+        // 11. DIAGRAMAS (se houver)
+        if (diagramImages && diagramImages.length > 0) {
+            children.push(...buildDiagramsSection(diagramImages, sectionNum++));
+            children.push(new Paragraph({ children: [new PageBreak()] }));
+        }
+
+        // 12. GLOSSÁRIO
         children.push(...buildGlossarySection(pddData, sectionNum++));
         children.push(new Paragraph({ children: [new PageBreak()] }));
 
@@ -1474,6 +1490,66 @@ const PDDBuilder = (function() {
                 children.push(buildBullet(`🔴 ${p}`, COLORS.ERROR));
             });
         }
+
+        return children;
+    }
+
+    function buildDiagramsSection(diagramImages, num) {
+        const children = [];
+
+        children.push(buildSectionTitle(`${num}. DIAGRAMAS E FLUXOS`));
+
+        children.push(buildParagraph('Esta seção apresenta os diagramas visuais do projeto, incluindo fluxos de processos, arquitetura e integrações.'));
+        children.push(new Paragraph({ spacing: { after: 300 } }));
+
+        // Adicionar cada diagrama
+        diagramImages.forEach((diagram, i) => {
+            // Título do diagrama
+            children.push(buildHeading2(`${num}.${i + 1} ${diagram.title}`));
+
+            // Imagem do diagrama
+            try {
+                const imageWidth = Math.min(diagram.width || 600, 600);
+                const aspectRatio = (diagram.height || 300) / (diagram.width || 600);
+                const imageHeight = Math.round(imageWidth * aspectRatio);
+
+                children.push(new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new ImageRun({
+                            data: Uint8Array.from(atob(diagram.base64), c => c.charCodeAt(0)),
+                            transformation: {
+                                width: imageWidth,
+                                height: imageHeight
+                            }
+                        })
+                    ],
+                    spacing: { after: 200 }
+                }));
+
+                // Legenda
+                children.push(new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new TextRun({
+                            text: `Figura ${i + 1}: ${diagram.title}`,
+                            font: FONTS.BODY,
+                            size: SIZES.TINY,
+                            italics: true,
+                            color: COLORS.GRAY
+                        })
+                    ],
+                    spacing: { after: 400 }
+                }));
+
+            } catch (e) {
+                console.warn(`Erro ao inserir diagrama ${diagram.title}:`, e);
+                children.push(buildParagraph(`[Diagrama: ${diagram.title} - não foi possível renderizar]`));
+            }
+        });
+
+        // Nota sobre os diagramas
+        children.push(...buildInfoBox('ℹ️ NOTA', 'Os diagramas foram gerados automaticamente a partir da especificação do projeto. Para versões editáveis, exporte os diagramas em formato Mermaid.'));
 
         return children;
     }
