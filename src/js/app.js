@@ -1268,16 +1268,31 @@ const App = (function() {
         document.getElementById('exampleName').value = '';
         document.getElementById('exampleKeywords').value = '';
         document.getElementById('exampleText').value = '';
+        
+        // Limpar estado de extração
+        extractedText = '';
+        document.getElementById('extractedTextPreview').style.display = 'none';
+        document.getElementById('pdfExtractionStatus').className = 'extraction-status';
+        document.getElementById('wordExtractionStatus').className = 'extraction-status';
+        
+        // Resetar tabs para texto
+        document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.input-tab').classList.add('active');
+        document.querySelectorAll('.example-tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('exampleTabText').classList.add('active');
     }
 
     function saveNewExample() {
         const name = document.getElementById('exampleName').value.trim();
         const category = document.getElementById('exampleCategory').value;
         const keywordsStr = document.getElementById('exampleKeywords').value.trim();
-        const text = document.getElementById('exampleText').value.trim();
+        const textAreaText = document.getElementById('exampleText').value.trim();
+        
+        // Usar texto extraído de PDF/Word se disponível, senão usar textarea
+        const text = extractedText || textAreaText;
 
         if (!name || !keywordsStr || !text) {
-            showToast('Preencha todos os campos obrigatórios', 'error');
+            showToast('Preencha todos os campos obrigatórios (nome, keywords e texto/arquivo)', 'error');
             return;
         }
 
@@ -1358,6 +1373,250 @@ const App = (function() {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // UPLOAD E EXTRAÇÃO DE ARQUIVOS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Estado do texto extraído
+    let extractedText = '';
+
+    function switchExampleTab(tab) {
+        // Atualizar tabs
+        document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+
+        // Atualizar conteúdo
+        document.querySelectorAll('.example-tab-content').forEach(c => c.classList.remove('active'));
+        
+        if (tab === 'text') {
+            document.getElementById('exampleTabText').classList.add('active');
+        } else if (tab === 'pdf') {
+            document.getElementById('exampleTabPdf').classList.add('active');
+        } else if (tab === 'word') {
+            document.getElementById('exampleTabWord').classList.add('active');
+        }
+    }
+
+    async function handlePdfUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const statusEl = document.getElementById('pdfExtractionStatus');
+        statusEl.className = 'extraction-status loading';
+        statusEl.textContent = '⏳ Extraindo texto do PDF...';
+
+        try {
+            const text = await extractTextFromPDF(file);
+            extractedText = text;
+            
+            showExtractedPreview(text);
+            
+            statusEl.className = 'extraction-status success';
+            statusEl.textContent = `✅ Texto extraído com sucesso! (${text.length} caracteres)`;
+            
+            // Auto-preencher nome se vazio
+            const nameInput = document.getElementById('exampleName');
+            if (!nameInput.value) {
+                nameInput.value = file.name.replace('.pdf', '').replace(/_/g, ' ');
+            }
+
+            // Auto-extrair keywords
+            autoExtractKeywords(text);
+
+        } catch (error) {
+            statusEl.className = 'extraction-status error';
+            statusEl.textContent = '❌ Erro ao extrair: ' + error.message;
+            console.error('Erro PDF:', error);
+        }
+    }
+
+    async function extractTextFromPDF(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullText = '';
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            fullText += pageText + '\n\n';
+        }
+        
+        return fullText.trim();
+    }
+
+    async function handleWordUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const statusEl = document.getElementById('wordExtractionStatus');
+        statusEl.className = 'extraction-status loading';
+        statusEl.textContent = '⏳ Extraindo texto do Word...';
+
+        try {
+            const text = await extractTextFromWord(file);
+            extractedText = text;
+            
+            showExtractedPreview(text);
+            
+            statusEl.className = 'extraction-status success';
+            statusEl.textContent = `✅ Texto extraído com sucesso! (${text.length} caracteres)`;
+            
+            // Auto-preencher nome se vazio
+            const nameInput = document.getElementById('exampleName');
+            if (!nameInput.value) {
+                nameInput.value = file.name.replace('.docx', '').replace(/_/g, ' ');
+            }
+
+            // Auto-extrair keywords
+            autoExtractKeywords(text);
+
+        } catch (error) {
+            statusEl.className = 'extraction-status error';
+            statusEl.textContent = '❌ Erro ao extrair: ' + error.message;
+            console.error('Erro Word:', error);
+        }
+    }
+
+    async function extractTextFromWord(file) {
+        // Para .docx, precisamos extrair o XML interno
+        const arrayBuffer = await file.arrayBuffer();
+        
+        // DOCX é um ZIP com XMLs dentro
+        // Vamos usar uma abordagem simples extraindo o document.xml
+        const JSZip = window.JSZip;
+        
+        if (!JSZip) {
+            // Se JSZip não estiver disponível, usar método alternativo
+            return await extractWordAlternative(file);
+        }
+        
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const documentXml = await zip.file('word/document.xml')?.async('string');
+        
+        if (!documentXml) {
+            throw new Error('Arquivo Word inválido');
+        }
+        
+        // Extrair texto dos elementos <w:t>
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(documentXml, 'text/xml');
+        const textNodes = xmlDoc.getElementsByTagName('w:t');
+        
+        let text = '';
+        for (let node of textNodes) {
+            text += node.textContent + ' ';
+        }
+        
+        return text.trim();
+    }
+
+    async function extractWordAlternative(file) {
+        // Método alternativo: ler como texto/bytes e extrair conteúdo
+        // Este é um fallback básico
+        const text = await file.text();
+        
+        // Tentar extrair texto legível
+        const readable = text.replace(/[^\x20-\x7E\n\r\tÀ-ÿ]/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+        
+        if (readable.length < 100) {
+            throw new Error('Não foi possível extrair texto. Tente copiar e colar o conteúdo manualmente.');
+        }
+        
+        return readable;
+    }
+
+    function showExtractedPreview(text) {
+        const previewEl = document.getElementById('extractedTextPreview');
+        const contentEl = document.getElementById('extractedTextContent');
+        const charsEl = document.getElementById('extractedChars');
+        const wordsEl = document.getElementById('extractedWords');
+        
+        // Mostrar prévia (primeiros 500 chars)
+        const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
+        contentEl.textContent = preview;
+        
+        // Stats
+        charsEl.textContent = text.length.toLocaleString() + ' caracteres';
+        wordsEl.textContent = text.split(/\s+/).filter(w => w).length.toLocaleString() + ' palavras';
+        
+        previewEl.style.display = 'block';
+    }
+
+    function autoExtractKeywords(text) {
+        const keywordsInput = document.getElementById('exampleKeywords');
+        if (keywordsInput.value) return; // Não sobrescrever se já preenchido
+
+        // Palavras-chave comuns em PDDs
+        const relevantTerms = [
+            'sap', 'erp', 'excel', 'email', 'banco', 'pagamento', 'cobrança', 
+            'nota fiscal', 'nfe', 'xml', 'relatório', 'dashboard', 'rpa', 
+            'automação', 'processo', 'validação', 'aprovação', 'integração',
+            'financeiro', 'fiscal', 'contábil', 'folha', 'rh', 'compras',
+            'fornecedor', 'cliente', 'pedido', 'estoque', 'faturamento'
+        ];
+
+        const textLower = text.toLowerCase();
+        const found = relevantTerms.filter(term => textLower.includes(term));
+        
+        // Também extrair palavras frequentes do texto
+        const stopWords = ['de', 'da', 'do', 'para', 'com', 'em', 'que', 'uma', 'um', 'os', 'as', 'no', 'na', 'por', 'ser', 'ao', 'ou', 'e', 'o', 'a', 'se', 'não', 'mais', 'como', 'foi', 'são', 'tem'];
+        const words = textLower
+            .replace(/[^a-záàâãéèêíïóôõöúçñ\s]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length > 4 && !stopWords.includes(w));
+        
+        const freq = {};
+        words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+        
+        const topWords = Object.entries(freq)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([word]) => word);
+
+        const allKeywords = [...new Set([...found, ...topWords])].slice(0, 10);
+        keywordsInput.value = allKeywords.join(', ');
+    }
+
+    // Adicionar suporte a drag & drop
+    function initDragAndDrop() {
+        ['pdfDropZone', 'wordDropZone'].forEach(zoneId => {
+            const zone = document.getElementById(zoneId);
+            if (!zone) return;
+
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('dragover');
+            });
+
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('dragover');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                
+                const file = e.dataTransfer.files[0];
+                if (!file) return;
+
+                if (zoneId === 'pdfDropZone' && file.type === 'application/pdf') {
+                    document.getElementById('pdfFileInput').files = e.dataTransfer.files;
+                    handlePdfUpload({ target: { files: [file] } });
+                } else if (zoneId === 'wordDropZone' && file.name.endsWith('.docx')) {
+                    document.getElementById('wordFileInput').files = e.dataTransfer.files;
+                    handleWordUpload({ target: { files: [file] } });
+                }
+            });
+        });
+    }
+
+    // Inicializar drag & drop quando DOM estiver pronto
+    document.addEventListener('DOMContentLoaded', initDragAndDrop);
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // API PÚBLICA
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1393,7 +1652,11 @@ const App = (function() {
         saveNewExample,
         deleteExample,
         viewExample,
-        showToast
+        showToast,
+        // Upload de arquivos
+        switchExampleTab,
+        handlePdfUpload,
+        handleWordUpload
     };
 
 })();

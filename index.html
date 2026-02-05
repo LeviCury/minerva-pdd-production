@@ -16,6 +16,11 @@
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <script>
         mermaid.initialize({ 
             startOnLoad: false, 
@@ -266,6 +271,13 @@ Inclua informações como:
                 <button class="modal-close" onclick="App.closeAddExample()">×</button>
             </div>
             <div class="modal-body">
+                <!-- Tabs para escolher método -->
+                <div class="input-tabs">
+                    <button class="input-tab active" onclick="App.switchExampleTab('text')">📝 Texto</button>
+                    <button class="input-tab" onclick="App.switchExampleTab('pdf')">📄 PDF</button>
+                    <button class="input-tab" onclick="App.switchExampleTab('word')">📘 Word</button>
+                </div>
+
                 <div class="form-group">
                     <label>Nome do Exemplo *</label>
                     <input type="text" id="exampleName" placeholder="Ex: Automação de Faturamento">
@@ -286,9 +298,53 @@ Inclua informações como:
                     <label>Keywords (separadas por vírgula) *</label>
                     <input type="text" id="exampleKeywords" placeholder="Ex: fatura, cobrança, cliente, venda">
                 </div>
-                <div class="form-group">
-                    <label>Descrição/Texto do Projeto *</label>
-                    <textarea id="exampleText" rows="8" placeholder="Cole aqui a descrição do projeto ou o texto do PDD existente..."></textarea>
+                
+                <!-- Tab: Texto -->
+                <div id="exampleTabText" class="example-tab-content active">
+                    <div class="form-group">
+                        <label>Descrição/Texto do Projeto *</label>
+                        <textarea id="exampleText" rows="8" placeholder="Cole aqui a descrição do projeto ou o texto do PDD existente..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Tab: PDF -->
+                <div id="exampleTabPdf" class="example-tab-content">
+                    <div class="form-group">
+                        <label>Upload de arquivo PDF</label>
+                        <div class="file-upload-zone" id="pdfDropZone">
+                            <input type="file" id="pdfFileInput" accept=".pdf" onchange="App.handlePdfUpload(event)" style="display: none;">
+                            <div class="upload-icon">📄</div>
+                            <p>Arraste um PDF aqui ou <span class="upload-link" onclick="document.getElementById('pdfFileInput').click()">clique para selecionar</span></p>
+                            <p class="upload-hint">O texto será extraído automaticamente</p>
+                        </div>
+                        <div id="pdfExtractionStatus" class="extraction-status"></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Word -->
+                <div id="exampleTabWord" class="example-tab-content">
+                    <div class="form-group">
+                        <label>Upload de arquivo Word (.docx)</label>
+                        <div class="file-upload-zone" id="wordDropZone">
+                            <input type="file" id="wordFileInput" accept=".docx" onchange="App.handleWordUpload(event)" style="display: none;">
+                            <div class="upload-icon">📘</div>
+                            <p>Arraste um DOCX aqui ou <span class="upload-link" onclick="document.getElementById('wordFileInput').click()">clique para selecionar</span></p>
+                            <p class="upload-hint">O texto será extraído automaticamente</p>
+                        </div>
+                        <div id="wordExtractionStatus" class="extraction-status"></div>
+                    </div>
+                </div>
+
+                <!-- Preview do texto extraído -->
+                <div id="extractedTextPreview" class="form-group" style="display: none;">
+                    <label>Texto Extraído (prévia)</label>
+                    <div class="extracted-preview">
+                        <div id="extractedTextContent"></div>
+                        <div class="extracted-stats">
+                            <span id="extractedChars">0 caracteres</span> |
+                            <span id="extractedWords">0 palavras</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

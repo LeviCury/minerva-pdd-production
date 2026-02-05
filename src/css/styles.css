@@ -1505,3 +1505,137 @@ body {
     resize: vertical;
     min-height: 120px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FILE UPLOAD AND TABS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.input-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    background: var(--bg);
+    padding: 4px;
+    border-radius: var(--radius);
+}
+
+.input-tab {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: calc(var(--radius) - 2px);
+    transition: var(--transition);
+}
+
+.input-tab:hover {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.input-tab.active {
+    background: var(--minerva);
+    color: white;
+}
+
+.example-tab-content {
+    display: none;
+}
+
+.example-tab-content.active {
+    display: block;
+}
+
+.file-upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    background: var(--bg);
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.file-upload-zone:hover,
+.file-upload-zone.dragover {
+    border-color: var(--minerva);
+    background: rgba(196, 30, 58, 0.05);
+}
+
+.file-upload-zone .upload-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.file-upload-zone p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.file-upload-zone .upload-link {
+    color: var(--minerva);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.file-upload-zone .upload-hint {
+    font-size: 0.8rem;
+    margin-top: 8px;
+    opacity: 0.7;
+}
+
+.extraction-status {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    display: none;
+}
+
+.extraction-status.loading {
+    display: block;
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.extraction-status.success {
+    display: block;
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.extraction-status.error {
+    display: block;
+    background: #ffebee;
+    color: #c62828;
+}
+
+.extracted-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.extracted-preview #extractedTextContent {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.extracted-stats {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
