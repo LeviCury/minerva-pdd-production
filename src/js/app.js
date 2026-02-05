@@ -1182,6 +1182,182 @@ const App = (function() {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // GESTÃO DE EXEMPLOS (RAG)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function showExamples() {
+        const modal = document.getElementById('examplesModal');
+        const content = document.getElementById('examplesContent');
+        
+        if (!modal || !content) return;
+
+        const stats = RAGSystem.getStats();
+        const examples = RAGSystem.getAllExamples();
+
+        let html = `
+            <div class="examples-stats">
+                <div class="stat">
+                    <div class="stat-value">${stats.total}</div>
+                    <div class="stat-label">Total</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${stats.default}</div>
+                    <div class="stat-label">Padrão</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${stats.custom}</div>
+                    <div class="stat-label">Customizados</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${stats.categories.length}</div>
+                    <div class="stat-label">Categorias</div>
+                </div>
+            </div>
+
+            <p style="margin-bottom: 16px; color: var(--text-muted); font-size: 0.9rem;">
+                O sistema RAG usa esses exemplos para melhorar a qualidade das análises. 
+                Quando você analisa um projeto, o sistema busca exemplos similares por keywords.
+            </p>
+
+            <div class="examples-list">
+        `;
+
+        examples.forEach(ex => {
+            const isDefault = ex.isDefault !== false;
+            html += `
+                <div class="example-card ${isDefault ? 'default' : 'custom'}">
+                    <div class="example-header">
+                        <div class="example-title">${ex.nome || ex.id}</div>
+                        <span class="example-badge ${isDefault ? 'default' : 'custom'}">
+                            ${isDefault ? 'Padrão' : 'Customizado'}
+                        </span>
+                    </div>
+                    <div class="example-category">${ex.category || 'SEM CATEGORIA'}</div>
+                    <div class="example-keywords">
+                        ${(ex.keywords || []).slice(0, 6).map(k => `<span class="example-keyword">${k}</span>`).join('')}
+                        ${(ex.keywords || []).length > 6 ? `<span class="example-keyword">+${ex.keywords.length - 6}</span>` : ''}
+                    </div>
+                    <div class="example-actions">
+                        <button class="btn-small" onclick="App.viewExample('${ex.id}')">👁️ Ver</button>
+                        ${!isDefault ? `<button class="btn-small" onclick="App.deleteExample('${ex.id}')" style="color: var(--error);">🗑️ Remover</button>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        content.innerHTML = html;
+        modal.classList.add('active');
+    }
+
+    function closeExamples() {
+        const modal = document.getElementById('examplesModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    function showAddExampleForm() {
+        const modal = document.getElementById('addExampleModal');
+        if (modal) modal.classList.add('active');
+    }
+
+    function closeAddExample() {
+        const modal = document.getElementById('addExampleModal');
+        if (modal) modal.classList.remove('active');
+        
+        // Limpar campos
+        document.getElementById('exampleName').value = '';
+        document.getElementById('exampleKeywords').value = '';
+        document.getElementById('exampleText').value = '';
+    }
+
+    function saveNewExample() {
+        const name = document.getElementById('exampleName').value.trim();
+        const category = document.getElementById('exampleCategory').value;
+        const keywordsStr = document.getElementById('exampleKeywords').value.trim();
+        const text = document.getElementById('exampleText').value.trim();
+
+        if (!name || !keywordsStr || !text) {
+            showToast('Preencha todos os campos obrigatórios', 'error');
+            return;
+        }
+
+        const keywords = keywordsStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
+        
+        if (keywords.length < 3) {
+            showToast('Adicione pelo menos 3 keywords', 'error');
+            return;
+        }
+
+        try {
+            const id = name.toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '_')
+                .substring(0, 30);
+
+            const example = {
+                id: id + '_' + Date.now(),
+                nome: name,
+                category: category,
+                keywords: keywords,
+                descricao_original: text,
+                exemplo: {
+                    projeto: {
+                        nome: name,
+                        objetivo: text.substring(0, 500)
+                    },
+                    rpas: [],
+                    regras_negocio: []
+                }
+            };
+
+            RAGSystem.addExample(example);
+            showToast('Exemplo adicionado com sucesso!', 'success');
+            closeAddExample();
+            showExamples(); // Atualizar lista
+
+        } catch (e) {
+            showToast('Erro ao salvar: ' + e.message, 'error');
+        }
+    }
+
+    function deleteExample(id) {
+        if (!confirm('Tem certeza que deseja remover este exemplo?')) return;
+        
+        try {
+            RAGSystem.removeExample(id);
+            showToast('Exemplo removido!', 'success');
+            showExamples(); // Atualizar lista
+        } catch (e) {
+            showToast('Erro: ' + e.message, 'error');
+        }
+    }
+
+    function viewExample(id) {
+        const example = RAGSystem.getExampleById(id);
+        if (!example) {
+            showToast('Exemplo não encontrado', 'error');
+            return;
+        }
+
+        const json = JSON.stringify(example, null, 2);
+        
+        // Criar modal temporário para visualização
+        const content = document.getElementById('examplesContent');
+        content.innerHTML = `
+            <div style="margin-bottom: 16px;">
+                <button class="btn-secondary" onclick="App.showExamples()">← Voltar</button>
+            </div>
+            <h3 style="margin-bottom: 12px;">${example.nome}</h3>
+            <pre style="background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; max-height: 400px;">${escapeHtml(json)}</pre>
+            <div style="margin-top: 16px;">
+                <button class="btn-secondary" onclick="navigator.clipboard.writeText(\`${json.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`).then(() => App.showToast('JSON copiado!', 'success'))">
+                    📋 Copiar JSON
+                </button>
+            </div>
+        `;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // API PÚBLICA
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1208,7 +1384,16 @@ const App = (function() {
         copyDiagramCode,
         exportAllDiagrams,
         exportDiagramsAsPNG,
-        exportDiagramsAsPDF
+        exportDiagramsAsPDF,
+        // Gestão de exemplos
+        showExamples,
+        closeExamples,
+        showAddExampleForm,
+        closeAddExample,
+        saveNewExample,
+        deleteExample,
+        viewExample,
+        showToast
     };
 
 })();

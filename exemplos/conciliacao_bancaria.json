@@ -1,0 +1,108 @@
+{
+  "id": "conciliacao_bancaria",
+  "keywords": ["banco", "bancário", "conciliação", "extrato", "financeiro", "tesouraria", "itau", "bradesco", "santander", "reconciliação"],
+  "category": "FINANCEIRO",
+  "nome": "Automação de Conciliação Bancária",
+  "descricao_original": "Projeto para automatizar o processo diário de conciliação entre extratos bancários e lançamentos contábeis no SAP.",
+  "exemplo": {
+    "projeto": {
+      "nome": "Automação de Conciliação Bancária",
+      "objetivo": "Automatizar o processo diário de conciliação entre extratos bancários e lançamentos contábeis no SAP, eliminando o trabalho manual e reduzindo erros de reconciliação.",
+      "justificativa": "O processo manual atual demanda 4 horas diárias de um analista, com taxa de erro de 5% nas conciliações.",
+      "beneficios": {
+        "tangiveis": [
+          "Redução de 4 horas diárias de trabalho manual",
+          "Eliminação de 95% dos erros de conciliação",
+          "Processamento de 500+ transações em 15 minutos"
+        ],
+        "intangiveis": [
+          "Maior confiabilidade nos dados financeiros",
+          "Liberação da equipe para análises estratégicas",
+          "Fechamento contábil mais ágil"
+        ]
+      }
+    },
+    "rpas": [{
+      "nome": "RPA Conciliação Bancária",
+      "descricao": "Robô responsável por baixar extratos, comparar com SAP e gerar relatório de pendências.",
+      "trigger": {
+        "tipo": "AGENDAMENTO",
+        "frequencia": "Diária às 7h",
+        "volume_estimado": "500 transações/dia"
+      },
+      "entrada": {
+        "origem": "Portal bancário + SAP",
+        "dados": ["Extrato OFX/CSV", "Lançamentos FBL3N"]
+      },
+      "saida": {
+        "destino": "SAP + Email",
+        "dados": ["Itens conciliados", "Relatório de pendências"]
+      },
+      "sistemas_utilizados": ["Portal Itaú", "SAP ERP", "Outlook", "Excel"],
+      "fluxo_execucao": [
+        "Acessar portal do banco via credenciais seguras",
+        "Baixar extrato do dia anterior em formato OFX/CSV",
+        "Parsear arquivo e extrair transações",
+        "Para cada transação, buscar correspondência no SAP (FBL3N)",
+        "Aplicar regras de matching (valor, data, referência)",
+        "Marcar itens conciliados no SAP",
+        "Gerar relatório de pendências em Excel",
+        "Enviar email com resumo para equipe financeira"
+      ],
+      "excecoes": [
+        {"cenario": "Portal bancário indisponível", "tratamento": "Retry em 30min, máx 3 tentativas, após alerta para TI"},
+        {"cenario": "Transação sem correspondência", "tratamento": "Registrar em planilha de pendências para análise manual"},
+        {"cenario": "Diferença de valor < R$0,50", "tratamento": "Conciliar automaticamente (tolerância de arredondamento)"},
+        {"cenario": "Sessão SAP expirada", "tratamento": "Reconectar automaticamente e retomar do último ponto"}
+      ]
+    }],
+    "regras_negocio": [
+      {
+        "codigo": "RN-001",
+        "tipo": "VAL",
+        "titulo": "Tolerância de Valor",
+        "descricao": "Diferenças de até R$ 0,50 são aceitas como arredondamento e conciliadas automaticamente",
+        "logica": "SE ABS(valor_banco - valor_sap) <= 0.50 ENTÃO conciliar_automatico()"
+      },
+      {
+        "codigo": "RN-002",
+        "tipo": "TIME",
+        "titulo": "Janela de Conciliação",
+        "descricao": "Transações são buscadas em janela de D-5 a D+2 para permitir atrasos de processamento",
+        "logica": "data_busca BETWEEN (data_transacao - 5) AND (data_transacao + 2)"
+      },
+      {
+        "codigo": "RN-003",
+        "tipo": "INF",
+        "titulo": "Tarifas Bancárias",
+        "descricao": "Tarifas bancárias são conciliadas automaticamente com conta contábil específica",
+        "logica": "SE tipo_transacao = 'TARIFA' ENTÃO conta_destino = '4.1.3.001'"
+      },
+      {
+        "codigo": "RN-004",
+        "tipo": "REST",
+        "titulo": "Limite de Retry",
+        "descricao": "Máximo de 3 tentativas de acesso ao portal antes de alertar",
+        "logica": "SE tentativas >= 3 ENTÃO alertar_ti() E pausar_execucao()"
+      }
+    ],
+    "integracoes": [
+      {
+        "codigo": "INT-001",
+        "sistema_externo": "Portal Itaú",
+        "proposito": "Download de extratos bancários",
+        "direcao": "ENTRADA",
+        "protocolo": "WEB",
+        "frequencia": "BATCH"
+      },
+      {
+        "codigo": "INT-002",
+        "sistema_externo": "SAP ERP",
+        "proposito": "Consulta e atualização de lançamentos",
+        "direcao": "BIDIRECIONAL",
+        "protocolo": "GUI",
+        "frequencia": "REAL_TIME"
+      }
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "id": "entrada_nfe",
+  "keywords": ["nota fiscal", "nfe", "nf-e", "entrada", "xml", "danfe", "fiscal", "tributário", "sefaz", "miro"],
+  "category": "FISCAL",
+  "nome": "Automação de Entrada de NF-e",
+  "descricao_original": "Projeto para automatizar o download, validação e lançamento de Notas Fiscais Eletrônicas de entrada no SAP.",
+  "exemplo": {
+    "projeto": {
+      "nome": "Automação de Entrada de NF-e",
+      "objetivo": "Automatizar o download, validação e lançamento de Notas Fiscais Eletrônicas de entrada no SAP, garantindo compliance fiscal e agilidade no processo.",
+      "justificativa": "Processo manual com risco de multas por notas não manifestadas no prazo e atrasos no fechamento fiscal.",
+      "beneficios": {
+        "tangiveis": [
+          "Redução de 6 horas diárias no processo de entrada",
+          "Zero atrasos em lançamentos fiscais",
+          "Eliminação de multas por notas não manifestadas"
+        ],
+        "intangiveis": [
+          "Conformidade fiscal garantida",
+          "Rastreabilidade completa do processo",
+          "Redução de estresse no fechamento"
+        ]
+      }
+    },
+    "rpas": [{
+      "nome": "RPA Entrada NF-e",
+      "descricao": "Robô que acessa SEFAZ, baixa XMLs, valida e lança no SAP automaticamente.",
+      "trigger": {
+        "tipo": "AGENDAMENTO",
+        "frequencia": "A cada 2 horas (8h às 18h)",
+        "volume_estimado": "200 NF-e/dia"
+      },
+      "entrada": {
+        "origem": "SEFAZ + SAP",
+        "dados": ["XMLs de NF-e", "Cadastro de fornecedores", "Pedidos de compra"]
+      },
+      "saida": {
+        "destino": "SAP + Pasta de arquivo",
+        "dados": ["MIRO lançada", "XML arquivado", "Manifestação registrada"]
+      },
+      "sistemas_utilizados": ["Portal SEFAZ", "SAP ERP (MM)", "Certificado Digital"],
+      "fluxo_execucao": [
+        "Acessar SEFAZ via certificado digital A1",
+        "Consultar NF-e destinadas ao CNPJ da empresa",
+        "Baixar XMLs das notas pendentes",
+        "Validar estrutura e assinatura digital do XML",
+        "Extrair dados: fornecedor, itens, valores, impostos",
+        "Validar fornecedor no cadastro SAP (XK03)",
+        "Verificar pedido de compra vinculado (ME23N)",
+        "Comparar valores do pedido com NF-e",
+        "Criar MIRO no SAP com dados da NF-e",
+        "Manifestar ciência da operação na SEFAZ",
+        "Arquivar XML em pasta estruturada por CNPJ/ano/mês"
+      ],
+      "excecoes": [
+        {"cenario": "Fornecedor não cadastrado", "tratamento": "Enviar para fila de cadastro, não lançar NF-e"},
+        {"cenario": "Divergência de valor > 5%", "tratamento": "Encaminhar para aprovação manual do comprador"},
+        {"cenario": "Certificado digital expirado", "tratamento": "Alertar TI imediatamente, pausar processo"},
+        {"cenario": "NF-e sem pedido vinculado", "tratamento": "Enviar para análise do requisitante"},
+        {"cenario": "SEFAZ indisponível", "tratamento": "Retry em 15min, máx 5 tentativas"}
+      ]
+    }],
+    "regras_negocio": [
+      {
+        "codigo": "RN-001",
+        "tipo": "VAL",
+        "titulo": "Validação de CNPJ",
+        "descricao": "Fornecedor deve estar ativo no cadastro SAP para lançamento",
+        "logica": "SE fornecedor.status != 'ATIVO' ENTÃO rejeitar_nfe() E enviar_para_cadastro()"
+      },
+      {
+        "codigo": "RN-002",
+        "tipo": "CALC",
+        "titulo": "Conferência de Impostos",
+        "descricao": "Recalcular impostos conforme regras fiscais e comparar com XML",
+        "logica": "diferenca = ABS(imposto_calculado - imposto_xml); SE diferenca > 1.00 ENTÃO alertar_fiscal()"
+      },
+      {
+        "codigo": "RN-003",
+        "tipo": "TIME",
+        "titulo": "Prazo de Manifestação",
+        "descricao": "NF-e deve ser manifestada em até 48h do recebimento",
+        "logica": "SE (data_atual - data_emissao) > 48h ENTÃO prioridade = 'URGENTE'"
+      },
+      {
+        "codigo": "RN-004",
+        "tipo": "REST",
+        "titulo": "Tolerância de Valor",
+        "descricao": "Divergência máxima de 5% entre pedido e NF-e para lançamento automático",
+        "logica": "SE ABS((valor_nfe - valor_pedido) / valor_pedido) > 0.05 ENTÃO aprovar_manual()"
+      }
+    ]
+  }
+}

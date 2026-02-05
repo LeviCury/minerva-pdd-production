@@ -53,6 +53,7 @@
                        placeholder="OpenAI API Key (GPT-4)" 
                        onchange="App.saveApiKey()">
             </div>
+            <button class="btn btn-outline" onclick="App.showExamples()">📚 Exemplos</button>
             <button class="btn btn-outline" onclick="App.showHelp()">❓ Como Funciona</button>
         </div>
     </header>
@@ -230,6 +231,69 @@ Inclua informações como:
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" onclick="App.closeHelp()">Entendi!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         EXAMPLES MODAL - Modal de Exemplos RAG
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="examplesModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📚 Repositório de Exemplos (RAG)</h2>
+                <button class="modal-close" onclick="App.closeExamples()">×</button>
+            </div>
+            <div class="modal-body" id="examplesContent">
+                <!-- Conteúdo gerado dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="App.closeExamples()">Fechar</button>
+                <button class="btn-primary" onclick="App.showAddExampleForm()">
+                    ➕ Adicionar Exemplo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ADD EXAMPLE MODAL - Modal para adicionar exemplo
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="addExampleModal" class="modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2>➕ Adicionar Novo Exemplo</h2>
+                <button class="modal-close" onclick="App.closeAddExample()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nome do Exemplo *</label>
+                    <input type="text" id="exampleName" placeholder="Ex: Automação de Faturamento">
+                </div>
+                <div class="form-group">
+                    <label>Categoria *</label>
+                    <select id="exampleCategory">
+                        <option value="FINANCEIRO">Financeiro</option>
+                        <option value="FISCAL">Fiscal</option>
+                        <option value="RH">RH</option>
+                        <option value="COMPRAS">Compras</option>
+                        <option value="GESTAO">Gestão</option>
+                        <option value="OPERACOES">Operações</option>
+                        <option value="OUTROS">Outros</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Keywords (separadas por vírgula) *</label>
+                    <input type="text" id="exampleKeywords" placeholder="Ex: fatura, cobrança, cliente, venda">
+                </div>
+                <div class="form-group">
+                    <label>Descrição/Texto do Projeto *</label>
+                    <textarea id="exampleText" rows="8" placeholder="Cole aqui a descrição do projeto ou o texto do PDD existente..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="App.closeAddExample()">Cancelar</button>
+                <button class="btn-primary" onclick="App.saveNewExample()">💾 Salvar Exemplo</button>
             </div>
         </div>
     </div>
