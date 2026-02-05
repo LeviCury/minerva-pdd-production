@@ -15,6 +15,7 @@
     <script src="https://unpkg.com/docx@8.2.2/build/index.umd.js"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
         mermaid.initialize({ 
             startOnLoad: false, 
@@ -248,10 +249,13 @@ Inclua informações como:
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="App.closeDiagrams()">Fechar</button>
                 <button class="btn-secondary" onclick="App.exportDiagramsAsPNG()">
-                    📸 Exportar PNG
+                    📸 PNG
+                </button>
+                <button class="btn-secondary" onclick="App.exportDiagramsAsPDF()">
+                    📄 PDF
                 </button>
                 <button class="btn-primary" onclick="App.exportAllDiagrams()">
-                    📥 Exportar Markdown
+                    📥 Markdown
                 </button>
             </div>
         </div>
@@ -294,6 +298,7 @@ Inclua informações como:
     <!-- ═══════════════════════════════════════════════════════════════════════
          SCRIPTS
          ═══════════════════════════════════════════════════════════════════════ -->
+    <script src="src/js/ragSystem.js"></script>
     <script src="src/js/aiAnalyzer.js"></script>
     <script src="src/js/schemaValidator.js"></script>
     <script src="src/js/diagramGenerator.js"></script>

@@ -1138,36 +1138,46 @@ const App = (function() {
     }
 
     async function exportDiagramsAsPNG() {
-        if (!state.pddData) {
-            showToast('Analise um projeto primeiro', 'error');
+        const containers = document.querySelectorAll('[id^="diagram-"]');
+        if (containers.length === 0) {
+            showToast('Nenhum diagrama para exportar', 'warning');
             return;
         }
 
-        showLoading('📸 Exportando Imagens', 'Gerando PNGs dos diagramas...');
+        showToast('Exportando PNGs...', 'info');
+        const projectName = state.pddData?.projeto?.nome || 'PDD';
+        let count = 0;
 
-        try {
-            const projectName = state.pddData?.projeto?.nome || 'PDD';
-            const images = await DiagramGenerator.exportAllAsPNG(state.pddData, projectName);
+        for (let i = 0; i < containers.length; i++) {
+            const container = containers[i];
+            const title = state.diagrams?.[i]?.type || `diagram_${i}`;
+            const filename = `${i + 1}_${title}_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+            
+            const success = await DiagramGenerator.exportSingleAsPNG(container, filename);
+            if (success) count++;
+            
+            await new Promise(r => setTimeout(r, 300));
+        }
 
-            if (images.length === 0) {
-                hideLoading();
-                showToast('Nenhum diagrama para exportar', 'warning');
-                return;
-            }
+        showToast(`${count} diagrama(s) exportado(s) como PNG!`, 'success');
+    }
 
-            // Baixar cada imagem
-            for (const img of images) {
-                DiagramGenerator.downloadImage(img.data, img.name);
-                await new Promise(r => setTimeout(r, 500)); // Delay entre downloads
-            }
+    async function exportDiagramsAsPDF() {
+        const containers = document.querySelectorAll('[id^="diagram-"]');
+        if (containers.length === 0) {
+            showToast('Nenhum diagrama para exportar', 'warning');
+            return;
+        }
 
-            hideLoading();
-            showToast(`${images.length} diagrama(s) exportado(s) como PNG!`, 'success');
-
-        } catch (error) {
-            console.error('Erro ao exportar diagramas:', error);
-            hideLoading();
-            showToast('Erro ao exportar diagramas: ' + error.message, 'error');
+        showToast('Gerando PDF...', 'info');
+        const projectName = state.pddData?.projeto?.nome || 'PDD';
+        
+        const success = await DiagramGenerator.exportAllAsPDF(projectName);
+        
+        if (success) {
+            showToast('PDF exportado com sucesso!', 'success');
+        } else {
+            showToast('Erro ao gerar PDF', 'error');
         }
     }
 
@@ -1197,7 +1207,8 @@ const App = (function() {
         closeDiagrams,
         copyDiagramCode,
         exportAllDiagrams,
-        exportDiagramsAsPNG
+        exportDiagramsAsPNG,
+        exportDiagramsAsPDF
     };
 
 })();

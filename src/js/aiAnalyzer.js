@@ -397,6 +397,17 @@ QUALIDADE DO OUTPUT
             throw new Error('Texto muito curto para análise. Descreva melhor o projeto.');
         }
 
+        // RAG: Buscar exemplos relevantes
+        let ragContext = '';
+        if (typeof RAGSystem !== 'undefined') {
+            try {
+                ragContext = RAGSystem.generateExamplesContext(text);
+                console.log('RAG: Contexto de exemplos gerado', ragContext ? 'com sucesso' : 'vazio');
+            } catch (e) {
+                console.warn('RAG: Erro ao gerar contexto', e);
+            }
+        }
+
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -416,11 +427,12 @@ TEXTO DO PROJETO
 ═══════════════════════════════════════════════════════════════════════════
 
 ${text}
-
+${ragContext}
 ═══════════════════════════════════════════════════════════════════════════
 
 Retorne o JSON completo seguindo EXATAMENTE a estrutura especificada.
-Seja EXAUSTIVO na extração. Infira o que for possível. Identifique lacunas críticas.`
+Seja EXAUSTIVO na extração. Infira o que for possível. Identifique lacunas críticas.
+Use os EXEMPLOS DE PDDs APROVADOS (se fornecidos) como referência de QUALIDADE e ESTILO.`
                     }
                 ],
                 temperature: 0.2,

@@ -556,29 +556,127 @@ const DiagramGenerator = (function() {
     }
 
     /**
-     * Exporta todos os diagramas como um ZIP de PNGs
+     * Exporta um diagrama como PNG - versão simplificada e rápida
      */
-    async function exportAllAsPNG(pddData, projectName = 'PDD') {
-        const diagrams = generateAllDiagrams(pddData);
-        const images = [];
+    async function exportSingleAsPNG(container, filename) {
+        const svg = container.querySelector('svg');
+        if (!svg) return false;
 
-        for (let i = 0; i < diagrams.length; i++) {
-            const diagram = diagrams[i];
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width * 2;
+                    canvas.height = img.height * 2;
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    const link = document.createElement('a');
+                    link.download = filename;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    
+                    URL.revokeObjectURL(url);
+                    resolve(true);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(false);
+                };
+                img.src = url;
+            });
+        } catch (e) {
+            console.error('Erro ao exportar PNG:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Exporta todos os diagramas visíveis como PDF
+     */
+    async function exportAllAsPDF(projectName = 'PDD') {
+        if (typeof jspdf === 'undefined') {
+            console.error('jsPDF não carregado');
+            return false;
+        }
+
+        const { jsPDF } = jspdf;
+        const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape A4
+        
+        const containers = document.querySelectorAll('[id^="diagram-"]');
+        if (containers.length === 0) return false;
+
+        let firstPage = true;
+
+        for (const container of containers) {
+            const svg = container.querySelector('svg');
+            if (!svg) continue;
+
+            if (!firstPage) {
+                pdf.addPage();
+            }
+            firstPage = false;
+
             try {
-                const result = await renderToBase64(diagram.mermaid, 1200);
-                if (result) {
-                    images.push({
-                        name: `${i + 1}_${diagram.type}_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
-                        title: diagram.title,
-                        data: result.base64
-                    });
-                }
+                // Converter SVG para canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        canvas.width = img.width * 2;
+                        canvas.height = img.height * 2;
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        // Adicionar ao PDF
+                        const imgData = canvas.toDataURL('image/png');
+                        const pdfWidth = 280; // A4 landscape width - margins
+                        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                        
+                        // Título
+                        const title = container.closest('.diagram-card')?.querySelector('h3')?.textContent || 'Diagrama';
+                        pdf.setFontSize(14);
+                        pdf.text(title, 15, 15);
+                        
+                        // Imagem
+                        const maxHeight = 180;
+                        const finalHeight = Math.min(pdfHeight, maxHeight);
+                        const finalWidth = (finalHeight / pdfHeight) * pdfWidth;
+                        
+                        pdf.addImage(imgData, 'PNG', 15, 25, finalWidth, finalHeight);
+                        
+                        URL.revokeObjectURL(url);
+                        resolve();
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        resolve();
+                    };
+                    img.src = url;
+                });
             } catch (e) {
-                console.warn(`Erro ao exportar: ${diagram.title}`, e);
+                console.warn('Erro ao adicionar diagrama ao PDF:', e);
             }
         }
 
-        return images;
+        // Salvar PDF
+        pdf.save(`Diagramas_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+        return true;
     }
 
     /**
@@ -607,10 +705,11 @@ const DiagramGenerator = (function() {
         renderDiagram,
         exportAsSVG,
         exportAsPNG,
-        // Novas funções para Word/Export
+        // Funções para Word/Export
         renderToBase64,
         renderAllForWord,
-        exportAllAsPNG,
+        exportSingleAsPNG,
+        exportAllAsPDF,
         downloadImage
     };
 
