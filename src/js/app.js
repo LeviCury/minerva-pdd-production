@@ -16,7 +16,8 @@ const App = (function() {
         pddData: null,
         isAnalyzing: false,
         pendingGaps: [],
-        additionalContext: ''
+        additionalContext: '',
+        attachedImages: []  // Array de {file, base64, name}
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -24,17 +25,17 @@ const App = (function() {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function init() {
-        // Carregar API key salva
-        state.apiKey = localStorage.getItem('minerva_openai_key') || '';
-        if (state.apiKey) {
-            const input = document.getElementById('apiKey');
-            if (input) input.value = state.apiKey;
-            showApiStatus(true);
-        }
+        // Configurar Maia como provider único
+        setTimeout(() => {
+            if (AIAnalyzer.setProvider) {
+                AIAnalyzer.setProvider('maia');
+            }
+            showApiStatus(true, 'Maia (GPT-5.2)');
+            console.log('Minerva PDD: Usando Maia (GPT-5.2) como provider');
+        }, 100);
 
         // Event listeners
         document.getElementById('projectText')?.addEventListener('input', updateStats);
-        document.getElementById('apiKey')?.addEventListener('change', saveApiKey);
         
         // Fechar modais ao clicar fora
         document.querySelectorAll('.modal').forEach(modal => {
@@ -69,12 +70,147 @@ const App = (function() {
         }
     }
 
-    function showApiStatus(connected) {
+    /**
+     * Altera o provider de IA (OpenAI ou Maia)
+     */
+    function changeProvider(provider) {
+        const apiKeyInput = document.getElementById('apiKey');
+        const providerSelect = document.getElementById('aiProvider');
+        
+        if (AIAnalyzer.setProvider) {
+            AIAnalyzer.setProvider(provider);
+        }
+        
+        // Salvar preferência
+        localStorage.setItem('minerva_ai_provider', provider);
+        
+        if (provider === 'maia') {
+            // Maia: esconder campo de API key
+            if (apiKeyInput) apiKeyInput.style.display = 'none';
+            showApiStatus(true, 'Maia (GPT-5.2)');
+            showToast('🚀 Usando Maia com GPT-5.2', 'success');
+        } else {
+            // OpenAI: mostrar campo de API key
+            if (apiKeyInput) apiKeyInput.style.display = 'block';
+            if (state.apiKey) {
+                showApiStatus(true, 'OpenAI (GPT-4o)');
+            } else {
+                showApiStatus(false);
+                showToast('Configure sua API Key da OpenAI', 'warning');
+            }
+        }
+    }
+
+    /**
+     * Carrega provider salvo
+     */
+    function loadSavedProvider() {
+        const savedProvider = localStorage.getItem('minerva_ai_provider') || 'maia';
+        const providerSelect = document.getElementById('aiProvider');
+        
+        if (providerSelect) {
+            providerSelect.value = savedProvider;
+        }
+        
+        changeProvider(savedProvider);
+    }
+
+    function showApiStatus(connected, providerName = '') {
         const indicator = document.getElementById('apiStatus');
         if (indicator) {
             indicator.className = `api-status ${connected ? 'connected' : ''}`;
-            indicator.title = connected ? 'IA Conectada' : 'IA Desconectada';
+            if (connected && providerName) {
+                indicator.title = `✅ Conectado: ${providerName}`;
+            } else if (connected) {
+                indicator.title = '✅ IA Conectada';
+            } else {
+                indicator.title = '❌ IA Desconectada - Configure a API Key';
+            }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GESTÃO DE IMAGENS ANEXADAS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    async function handleImageUpload(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) {
+                showToast(`${file.name} não é uma imagem válida`, 'error');
+                continue;
+            }
+
+            // Limitar tamanho (max 5MB por imagem)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast(`${file.name} é muito grande (máx 5MB)`, 'error');
+                continue;
+            }
+
+            try {
+                const base64 = await fileToBase64(file);
+                state.attachedImages.push({
+                    file: file,
+                    base64: base64,
+                    name: file.name
+                });
+            } catch (err) {
+                showToast(`Erro ao processar ${file.name}`, 'error');
+            }
+        }
+
+        updateImagePreview();
+        event.target.value = ''; // Reset input para permitir re-upload do mesmo arquivo
+    }
+
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function removeImage(index) {
+        state.attachedImages.splice(index, 1);
+        updateImagePreview();
+    }
+
+    function updateImagePreview() {
+        const preview = document.getElementById('imagePreview');
+        const countSpan = document.getElementById('attachmentCount');
+        
+        if (!preview) return;
+
+        const count = state.attachedImages.length;
+        
+        // Atualizar contador
+        if (countSpan) {
+            countSpan.textContent = count === 0 
+                ? 'Nenhuma imagem anexada' 
+                : `${count} imagem${count > 1 ? 's' : ''} anexada${count > 1 ? 's' : ''}`;
+        }
+
+        // Gerar preview
+        preview.innerHTML = state.attachedImages.map((img, i) => `
+            <div class="attachment-item" title="${img.name}">
+                <img src="${img.base64}" alt="${img.name}">
+                <button class="remove-btn" onclick="App.removeImage(${i})">×</button>
+            </div>
+        `).join('');
+    }
+
+    function getAttachedImagesForAPI() {
+        return state.attachedImages.map(img => ({
+            type: 'image_url',
+            image_url: {
+                url: img.base64,
+                detail: 'high'
+            }
+        }));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -144,20 +280,21 @@ const App = (function() {
             return;
         }
 
-        if (!state.apiKey) {
-            showToast('Configure a API Key da OpenAI primeiro', 'error');
-            document.getElementById('apiKey')?.focus();
-            return;
-        }
-
         state.rawText = text;
         state.isAnalyzing = true;
         state.additionalContext = '';
         
-        showLoading('🤖 Analisando com IA', 'Extraindo requisitos, regras de negócio e estrutura do PDD...');
+        const imageCount = state.attachedImages.length;
+        const loadingMsg = imageCount > 0 
+            ? `Analisando com Maia (GPT-5.2): texto + ${imageCount} imagem${imageCount > 1 ? 's' : ''}...`
+            : `Analisando com Maia (GPT-5.2): extraindo requisitos, regras e estrutura...`;
+        
+        showLoading('🚀 Analisando com Maia', loadingMsg);
 
         try {
-            const pddData = await AIAnalyzer.analyze(text, state.apiKey);
+            // Passar imagens anexadas para a IA
+            const images = getAttachedImagesForAPI();
+            const pddData = await AIAnalyzer.analyze(text, state.apiKey, images);
             state.pddData = pddData;
             
             hideLoading();
@@ -193,69 +330,167 @@ const App = (function() {
         if (!modal || !content) return;
 
         state.pendingGaps = gaps;
+        
+        // Agrupar por impacto
+        const altos = gaps.filter(g => g.impacto === 'ALTO');
+        const medios = gaps.filter(g => g.impacto === 'MEDIO');
+        const baixos = gaps.filter(g => g.impacto === 'BAIXO');
+        
+        // Agrupar por categoria
+        const categorias = {};
+        gaps.forEach(g => {
+            const cat = g.categoria || 'GERAL';
+            if (!categorias[cat]) categorias[cat] = [];
+            categorias[cat].push(g);
+        });
+
+        const catIcons = {
+            'STAKEHOLDERS': '👥', 'OPERACIONAL': '⚙️', 'INTEGRAÇÃO': '🔗',
+            'EXCEÇÕES': '🚨', 'COMUNICAÇÃO': '📧', 'REGRA DE NEGÓCIO': '📐',
+            'SEGURANÇA': '🔒', 'GERAL': '📋', 'AMBIGUIDADE': '❓',
+            'INCOMPLETUDE': '📝', 'TEMPORALIDADE': '⏰', 'ESPECIFICACAO': '🎯'
+        };
 
         let html = `
-            <div class="gaps-header">
-                <div class="gaps-icon">⚠️</div>
-                <h3>Informações Importantes Não Identificadas</h3>
-                <p>A IA identificou algumas informações que podem melhorar o PDD. Você pode:</p>
-            </div>
-
-            <div class="gaps-options">
-                <div class="gap-option" onclick="App.proceedWithoutGaps()">
-                    <div class="option-icon">✅</div>
-                    <div class="option-content">
-                        <strong>Gerar PDD mesmo assim</strong>
-                        <span>Continuar com as informações disponíveis. O PDD será gerado com o contexto atual.</span>
+            <div class="gaps-header-new">
+                <div class="gaps-title-area">
+                    <div class="gaps-main-icon">🔍</div>
+                    <div>
+                        <h3>Análise de Completude do PDD</h3>
+                        <p>A IA identificou <strong>${gaps.length}</strong> pontos que precisam de atenção para gerar um PDD excelente.</p>
                     </div>
                 </div>
-                <div class="gap-option" onclick="App.showGapInputs()">
-                    <div class="option-icon">✏️</div>
-                    <div class="option-content">
-                        <strong>Adicionar informações faltantes</strong>
-                        <span>Responder às perguntas abaixo para um PDD mais completo.</span>
+                <div class="gaps-summary-bar">
+                    <div class="gaps-count-pill high">
+                        <span class="pill-count">${altos.length}</span>
+                        <span class="pill-label">Críticas</span>
+                    </div>
+                    <div class="gaps-count-pill medium">
+                        <span class="pill-count">${medios.length}</span>
+                        <span class="pill-label">Importantes</span>
+                    </div>
+                    <div class="gaps-count-pill low">
+                        <span class="pill-count">${baixos.length}</span>
+                        <span class="pill-label">Opcionais</span>
                     </div>
                 </div>
             </div>
 
-            <div class="gaps-list">
-                <h4>📋 ${gaps.length} informação(ões) não identificada(s):</h4>
+            <div class="gaps-action-bar">
+                <button class="gaps-action-btn primary" onclick="App.showGapInputs()">
+                    <span class="action-icon">✏️</span>
+                    <div class="action-text">
+                        <strong>Responder e Enriquecer PDD</strong>
+                        <span>Preencha as informações para um PDD excelente</span>
+                    </div>
+                </button>
+                <button class="gaps-action-btn secondary" onclick="App.proceedWithoutGaps()">
+                    <span class="action-icon">⚡</span>
+                    <div class="action-text">
+                        <strong>Gerar PDD Agora</strong>
+                        <span>Continuar com as informações disponíveis</span>
+                    </div>
+                </button>
+            </div>
+
+            <div class="gaps-categories-list">
         `;
 
-        gaps.forEach((gap, i) => {
-            const impactoClass = gap.impacto === 'ALTO' ? 'high' : gap.impacto === 'MEDIO' ? 'medium' : 'low';
+        // Render por categoria
+        Object.keys(categorias).sort().forEach(cat => {
+            const catGaps = categorias[cat];
+            const icon = catIcons[cat] || '📋';
+            const catAltos = catGaps.filter(g => g.impacto === 'ALTO').length;
+            
             html += `
-                <div class="gap-item ${impactoClass}">
-                    <div class="gap-badge">${gap.impacto}</div>
-                    <div class="gap-info">
-                        <strong>${gap.descricao}</strong>
-                        <span class="gap-question">${gap.sugestao_pergunta}</span>
+                <div class="gap-category-group">
+                    <div class="gap-category-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <div class="cat-header-left">
+                            <span class="cat-icon">${icon}</span>
+                            <span class="cat-name">${cat}</span>
+                            <span class="cat-count">${catGaps.length} item${catGaps.length > 1 ? 's' : ''}</span>
+                            ${catAltos > 0 ? `<span class="cat-critical">${catAltos} crítica${catAltos > 1 ? 's' : ''}</span>` : ''}
+                        </div>
+                        <span class="cat-toggle">▼</span>
+                    </div>
+                    <div class="gap-category-body">
+            `;
+
+            catGaps.forEach((gap, i) => {
+                const impClass = gap.impacto === 'ALTO' ? 'high' : gap.impacto === 'MEDIO' ? 'medium' : 'low';
+                const impLabel = gap.impacto === 'ALTO' ? 'CRÍTICA' : gap.impacto === 'MEDIO' ? 'IMPORTANTE' : 'OPCIONAL';
+                const tipoIcon = gap.tipo === 'PERGUNTA' ? '❓' : '⚠️';
+                
+                html += `
+                    <div class="gap-item-new ${impClass}">
+                        <div class="gap-item-header">
+                            <span class="gap-tipo-icon">${tipoIcon}</span>
+                            <span class="gap-imp-badge ${impClass}">${impLabel}</span>
+                            ${gap.trecho_original ? `<span class="gap-trecho">"${gap.trecho_original}"</span>` : ''}
+                        </div>
+                        <div class="gap-item-body">
+                            <p class="gap-desc">${gap.descricao}</p>
+                            <div class="gap-pergunta">
+                                <span class="pergunta-icon">💬</span>
+                                <span>${gap.sugestao_pergunta}</span>
+                            </div>
+                            ${gap.contexto ? `<p class="gap-contexto">📎 ${gap.contexto}</p>` : ''}
+                            ${gap.valor_sugerido ? `<p class="gap-sugerido">💡 Sugestão: <em>${gap.valor_sugerido}</em></p>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
                     </div>
                 </div>
             `;
         });
 
-        html += `
-            </div>
+        html += `</div>`;
 
-            <div id="gapInputsContainer" class="gap-inputs-container" style="display: none;">
-                <h4>📝 Preencha as informações:</h4>
+        // Seção de inputs (inicialmente oculta)
+        html += `
+            <div id="gapInputsContainer" class="gap-inputs-container-new" style="display: none;">
+                <div class="gap-inputs-header-new">
+                    <h4>📝 Preencha as informações faltantes</h4>
+                    <p>Responda o máximo que puder. Campos em branco serão inferidos pela IA.</p>
+                    <div class="gap-inputs-progress">
+                        <div class="progress-bar-mini">
+                            <div class="progress-fill-mini" id="gapProgressFill" style="width: 0%"></div>
+                        </div>
+                        <span class="progress-text" id="gapProgressText">0 de ${gaps.length} respondidas</span>
+                    </div>
+                </div>
         `;
 
         gaps.forEach((gap, i) => {
+            const impClass = gap.impacto === 'ALTO' ? 'high' : gap.impacto === 'MEDIO' ? 'medium' : 'low';
+            const impLabel = gap.impacto === 'ALTO' ? 'CRÍTICA' : gap.impacto === 'MEDIO' ? 'IMPORTANTE' : 'OPCIONAL';
+            
             html += `
-                <div class="gap-input-field">
-                    <label>${gap.sugestao_pergunta}</label>
-                    <input type="text" id="gap_input_${i}" placeholder="Digite aqui..." data-campo="${gap.campo}" />
+                <div class="gap-input-card ${impClass}">
+                    <div class="gap-input-label">
+                        <span class="gap-input-num">${i + 1}</span>
+                        <span class="gap-imp-badge ${impClass}">${impLabel}</span>
+                        <span class="gap-input-question">${gap.sugestao_pergunta}</span>
+                    </div>
+                    ${gap.valor_sugerido ? `<div class="gap-input-hint">💡 Sugestão: ${gap.valor_sugerido}</div>` : ''}
+                    <textarea id="gap_input_${i}" 
+                        class="gap-input-textarea" 
+                        placeholder="Digite sua resposta aqui..." 
+                        data-campo="${gap.campo}"
+                        rows="2"
+                        oninput="App.updateGapProgress()"></textarea>
                 </div>
             `;
         });
 
         html += `
-                <div class="gap-inputs-actions">
-                    <button class="btn-secondary" onclick="App.hideGapInputs()">Voltar</button>
-                    <button class="btn-primary" onclick="App.submitGapInputs()">
-                        🔄 Reanalisar com novas informações
+                <div class="gap-inputs-actions-new">
+                    <button class="btn-secondary" onclick="App.hideGapInputs()">← Voltar</button>
+                    <button class="btn-primary btn-large" onclick="App.submitGapInputs()">
+                        🚀 Reanalisar com informações adicionais
                     </button>
                 </div>
             </div>
@@ -277,6 +512,20 @@ const App = (function() {
         const options = document.querySelector('.gaps-options');
         if (container) container.style.display = 'none';
         if (options) options.style.display = 'flex';
+    }
+
+    function updateGapProgress() {
+        const total = state.pendingGaps?.length || 0;
+        let filled = 0;
+        for (let i = 0; i < total; i++) {
+            const input = document.getElementById(`gap_input_${i}`);
+            if (input && input.value.trim()) filled++;
+        }
+        const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+        const fillEl = document.getElementById('gapProgressFill');
+        const textEl = document.getElementById('gapProgressText');
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (textEl) textEl.textContent = `${filled} de ${total} respondidas`;
     }
 
     async function submitGapInputs() {
@@ -335,7 +584,34 @@ const App = (function() {
         const stats = pddData._estatisticas || {};
         const qualidade = pddData.analise_qualidade || {};
 
+        // Calcular score de qualidade do PDD
+        const pddScore = calculatePDDScore(pddData);
+        
         let html = `
+            <!-- Score de Qualidade do PDD -->
+            <div class="pdd-quality-score" style="background: linear-gradient(135deg, ${pddScore.color}15, ${pddScore.color}05); border: 2px solid ${pddScore.color}; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h3 style="margin: 0; color: ${pddScore.color};">Score de Qualidade do PDD</h3>
+                    <div style="font-size: 28px; font-weight: bold; color: ${pddScore.color};">${pddScore.total}%</div>
+                </div>
+                <div style="background: #e2e8f0; border-radius: 8px; height: 12px; overflow: hidden; margin-bottom: 12px;">
+                    <div style="background: ${pddScore.color}; height: 100%; width: ${pddScore.total}%; border-radius: 8px; transition: width 1s ease;"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; font-size: 12px;">
+                    ${pddScore.items.map(item => `
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <span style="color: ${item.ok ? '#276749' : '#9b2c2c'};">${item.ok ? '✅' : '❌'}</span>
+                            <span>${item.label}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                ${pddScore.warnings.length > 0 ? `
+                    <div style="margin-top: 10px; padding: 8px; background: #fffff0; border-radius: 6px; font-size: 12px; color: #975a16;">
+                        ${pddScore.warnings.map(w => `⚠️ ${w}`).join('<br/>')}
+                    </div>
+                ` : ''}
+            </div>
+
             <!-- Resumo da Análise -->
             <div class="analysis-summary">
                 <div class="summary-header">
@@ -364,6 +640,14 @@ const App = (function() {
                     <div class="stat-item">
                         <span class="stat-value">${stats.total_riscos || 0}</span>
                         <span class="stat-label">Riscos</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${pddData.lacunas_criticas?.length || 0}</span>
+                        <span class="stat-label">Lacunas</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${pddData.requisitos_inferidos?.length || 0}</span>
+                        <span class="stat-label">Inferidos</span>
                     </div>
                 </div>
                 ${qualidade.observacoes_analise ? `<p class="analysis-notes">${escapeHtml(qualidade.observacoes_analise)}</p>` : ''}
@@ -700,6 +984,57 @@ const App = (function() {
         showToast(`Análise concluída! ${stats.total_rpas} RPAs, ${stats.total_requisitos} requisitos, ${stats.total_regras} regras identificados.`, 'success');
     }
 
+    /**
+     * Calcula score de qualidade do PDD gerado
+     * Avalia completude de todas as seções
+     */
+    function calculatePDDScore(pddData) {
+        const items = [];
+        const warnings = [];
+        let score = 0;
+        let maxScore = 0;
+
+        // Seções e seus pesos
+        const checks = [
+            { label: 'Projeto', ok: !!pddData.projeto?.nome && !!pddData.projeto?.objetivo, weight: 10 },
+            { label: 'RPAs', ok: pddData.rpas?.length > 0, weight: 15 },
+            { label: 'Fluxo Execução', ok: pddData.rpas?.some(r => r.fluxo_execucao?.length > 0), weight: 10 },
+            { label: 'Subpassos', ok: pddData.rpas?.some(r => r.fluxo_execucao?.some(f => f.subpassos?.length > 0)), weight: 8 },
+            { label: 'Requisitos', ok: pddData.requisitos_funcionais?.length > 0, weight: 10 },
+            { label: 'Regras Negócio', ok: pddData.regras_negocio?.length > 0, weight: 10 },
+            { label: 'Integrações', ok: pddData.integracoes?.length > 0, weight: 8 },
+            { label: 'Stakeholders', ok: !!pddData.stakeholders?.sponsor, weight: 5 },
+            { label: 'Infraestrutura', ok: pddData.infraestrutura?.servidores?.length > 0 || pddData.infraestrutura?.tecnologias?.length > 0, weight: 5 },
+            { label: 'Cronograma', ok: pddData.cronograma_sugerido?.fases?.length > 0, weight: 5 },
+            { label: 'Riscos', ok: pddData.riscos?.length > 0, weight: 5 },
+            { label: 'Glossário', ok: pddData.glossario?.length > 0, weight: 3 },
+            { label: 'Escopo', ok: pddData.projeto?.escopo?.incluido?.length > 0, weight: 3 },
+            { label: 'Benefícios', ok: pddData.projeto?.beneficios?.tangiveis?.length > 0, weight: 3 }
+        ];
+
+        checks.forEach(check => {
+            maxScore += check.weight;
+            if (check.ok) score += check.weight;
+            items.push({ label: check.label, ok: check.ok });
+        });
+
+        const total = Math.round((score / maxScore) * 100);
+
+        // Warnings
+        if (!pddData.rpas?.length) warnings.push('Nenhum RPA identificado - seção principal vazia');
+        if (!pddData.rpas?.some(r => r.fluxo_execucao?.some(f => f.subpassos?.length > 0))) {
+            warnings.push('RPAs sem subpassos detalhados - fluxo pode ficar superficial');
+        }
+        if (pddData.lacunas_criticas?.length > 5) {
+            warnings.push(`${pddData.lacunas_criticas.length} lacunas críticas - considere enriquecer o texto de entrada`);
+        }
+        if (!pddData.requisitos_funcionais?.length) warnings.push('Sem requisitos funcionais - PDD incompleto');
+
+        const color = total >= 80 ? '#276749' : total >= 60 ? '#975a16' : '#9b2c2c';
+
+        return { total, items, warnings, color };
+    }
+
     function getConfidenceClass(confidence) {
         if (confidence >= 80) return 'high';
         if (confidence >= 60) return 'medium';
@@ -878,20 +1213,17 @@ const App = (function() {
         showLoading('📄 Gerando PDD', 'Criando documento Word profissional completo...');
 
         try {
-            const doc = PDDBuilder.build(pddData, {
+            // PDDBuilder.build() já salva o arquivo internamente
+            await PDDBuilder.build(pddData, {
                 incluirCapa: true,
                 incluirSumario: true,
                 incluirCronograma: true,
                 incluirRiscos: true,
                 incluirRequisitos: true,
                 incluirRegras: true,
-                incluirIntegracoes: true
+                incluirIntegracoes: true,
+                incluirDiagramas: true  // Reativado com timeout de 5s por diagrama
             });
-
-            const blob = await docx.Packer.toBlob(doc);
-            
-            const fileName = `PDD_${pddData.projeto.nome.replace(/[^a-zA-Z0-9À-ÿ]/g, '_')}_${new Date().toISOString().slice(0, 10)}.docx`;
-            saveAs(blob, fileName);
 
             hideLoading();
             closeReview();
@@ -1629,9 +1961,11 @@ const App = (function() {
         showHelp,
         closeHelp,
         saveApiKey,
+        changeProvider,  // Novo: alternar entre OpenAI e Maia
         proceedWithoutGaps,
         showGapInputs,
         hideGapInputs,
+        updateGapProgress,
         submitGapInputs,
         toggleSection,
         closeAllModals,
@@ -1656,7 +1990,10 @@ const App = (function() {
         // Upload de arquivos
         switchExampleTab,
         handlePdfUpload,
-        handleWordUpload
+        handleWordUpload,
+        // Imagens anexadas
+        handleImageUpload,
+        removeImage
     };
 
 })();

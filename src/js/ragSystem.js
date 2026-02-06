@@ -1394,7 +1394,7 @@ const RAGSystem = (function() {
      * Gera contexto para o prompt da IA
      */
     function generateExamplesContext(userText) {
-        const relevantExamples = findRelevantExamples(userText, 2);
+        const relevantExamples = findRelevantExamples(userText, 1);
         
         if (relevantExamples.length === 0) {
             return '';
@@ -1420,14 +1420,14 @@ ${ex.exemplo?.projeto?.objetivo || 'N/A'}
 Tangíveis: ${ex.exemplo?.projeto?.beneficios?.tangiveis?.join('; ') || 'N/A'}
 Intangíveis: ${ex.exemplo?.projeto?.beneficios?.intangiveis?.join('; ') || 'N/A'}
 
-**Fluxo de Execução (exemplo de detalhamento):**
-${ex.exemplo?.rpas?.[0]?.fluxo_execucao?.map((f, j) => `${j + 1}. ${f}`).join('\n') || 'N/A'}
+**Fluxo de Execução (exemplo de detalhamento - primeiros 10 passos):**
+${ex.exemplo?.rpas?.[0]?.fluxo_execucao?.slice(0, 10).map((f, j) => `${j + 1}. ${f}`).join('\n') || 'N/A'}
 
-**Regras de Negócio (exemplo de estrutura):**
-${ex.exemplo?.regras_negocio?.map(rn => `- ${rn.codigo}: ${rn.titulo}`).join('\n') || 'N/A'}
+**Regras de Negócio (exemplo - primeiras 5):**
+${ex.exemplo?.regras_negocio?.slice(0, 5).map(rn => `- ${rn.codigo}: ${rn.titulo}`).join('\n') || 'N/A'}
 
-**Exceções (exemplo de tratamento):**
-${ex.exemplo?.rpas?.[0]?.excecoes?.map(e => `- ${e.cenario}: ${e.tratamento}`).join('\n') || 'N/A'}
+**Exceções (exemplo - primeiras 5):**
+${ex.exemplo?.rpas?.[0]?.excecoes?.slice(0, 5).map(e => `- ${e.cenario}: ${e.tratamento}`).join('\n') || 'N/A'}
 
 ---
 `;

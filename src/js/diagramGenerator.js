@@ -36,22 +36,22 @@ const DiagramGenerator = (function() {
             const code = rpa.codigo || `RPA-${(i+1).toString().padStart(3, '0')}`;
             const name = rpa.nome || `RPA ${i + 1}`;
             const shortName = name.length > 25 ? name.substring(0, 22) + '...' : name;
-            mermaid += `    ${code.replace('-', '')}["🤖 ${code}<br/>${shortName}"]:::rpa\n`;
+            mermaid += `    ${code.replace(/-/g, '')}["${code}<br/>${sanitize(shortName)}"]:::rpa\n`;
         });
 
         // Output final
         mermaid += `    OUTPUT[("📤 Output Final")]:::output\n\n`;
 
         // Conexões
-        mermaid += `    TRIGGER --> ${rpas[0].codigo?.replace('-', '') || 'RPA001'}\n`;
+        mermaid += `    TRIGGER --> ${rpas[0].codigo?.replace(/-/g, '') || 'RPA001'}\n`;
         
         for (let i = 0; i < rpas.length - 1; i++) {
-            const current = rpas[i].codigo?.replace('-', '') || `RPA${(i+1).toString().padStart(3, '0')}`;
-            const next = rpas[i+1].codigo?.replace('-', '') || `RPA${(i+2).toString().padStart(3, '0')}`;
+            const current = rpas[i].codigo?.replace(/-/g, '') || `RPA${(i+1).toString().padStart(3, '0')}`;
+            const next = rpas[i+1].codigo?.replace(/-/g, '') || `RPA${(i+2).toString().padStart(3, '0')}`;
             mermaid += `    ${current} --> ${next}\n`;
         }
         
-        const lastRpa = rpas[rpas.length - 1].codigo?.replace('-', '') || `RPA${rpas.length.toString().padStart(3, '0')}`;
+        const lastRpa = rpas[rpas.length - 1].codigo?.replace(/-/g, '') || `RPA${rpas.length.toString().padStart(3, '0')}`;
         mermaid += `    ${lastRpa} --> OUTPUT\n`;
 
         return {
@@ -75,13 +75,13 @@ const DiagramGenerator = (function() {
 
         // Entrada
         const entrada = rpa.entrada?.dados?.join(', ') || 'Dados de entrada';
-        mermaid += `    INPUT[/"📥 ${truncate(entrada, 30)}"/]:::io\n`;
+        mermaid += `    INPUT[/"${sanitize(truncate(entrada, 30))}"/]:::io\n`;
 
         // Passos do fluxo
         if (rpa.fluxo_execucao && rpa.fluxo_execucao.length > 0) {
             rpa.fluxo_execucao.forEach((passo, i) => {
-                const acao = typeof passo === 'string' ? passo : (passo.acao || passo.descricao || `Passo ${i+1}`);
-                mermaid += `    STEP${i+1}["${i+1}. ${truncate(acao, 35)}"]:::step\n`;
+                const acao = typeof passo === 'string' ? passo : (passo.titulo || passo.acao || passo.descricao || `Passo ${i+1}`);
+                mermaid += `    STEP${i+1}["${i+1}. ${sanitize(truncate(acao, 35))}"]:::step\n`;
             });
 
             // Conexões
@@ -97,8 +97,8 @@ const DiagramGenerator = (function() {
         }
 
         // Saída
-        const saida = rpa.saida?.dados?.join(', ') || 'Dados de saída';
-        mermaid += `    OUTPUT[/"📤 ${truncate(saida, 30)}"/]:::io\n`;
+        const saida = rpa.saida?.dados?.join(', ') || 'Dados de saida';
+        mermaid += `    OUTPUT[/"${sanitize(truncate(saida, 30))}"/]:::io\n`;
 
         // Tratamento de exceção (se houver)
         if (rpa.excecoes && rpa.excecoes.length > 0) {
@@ -136,7 +136,7 @@ const DiagramGenerator = (function() {
             pddData.rpas.forEach((rpa, i) => {
                 const code = rpa.codigo || `RPA${(i+1).toString().padStart(3, '0')}`;
                 const name = rpa.nome || `RPA ${i+1}`;
-                mermaid += `        ${code.replace('-', '')}["${code}<br/>${truncate(name, 20)}"]:::rpa\n`;
+                mermaid += `        ${code.replace(/-/g, '')}["${code}<br/>${sanitize(truncate(name, 20))}"]:::rpa\n`;
             });
         }
         mermaid += '    end\n\n';
@@ -153,10 +153,10 @@ const DiagramGenerator = (function() {
                 ...integracoes.map(i => i.sistema_externo).filter(Boolean)
             ]);
             
-            allSystems.forEach((sys, i) => {
+            [...allSystems].forEach((sys, i) => {
                 if (sys) {
                     const sysId = `SYS${i}`;
-                    mermaid += `        ${sysId}["${sys}"]:::system\n`;
+                    mermaid += `        ${sysId}["${sanitize(sys)}"]:::system\n`;
                 }
             });
             mermaid += '    end\n\n';
@@ -179,10 +179,11 @@ const DiagramGenerator = (function() {
         // RPAs para sistemas
         if (pddData.rpas && sistemas.length > 0) {
             pddData.rpas.forEach((rpa, i) => {
-                const rpaId = (rpa.codigo || `RPA${(i+1).toString().padStart(3, '0')}`).replace('-', '');
+                const rpaId = (rpa.codigo || `RPA${(i+1).toString().padStart(3, '0')}`).replace(/-/g, '');
                 if (rpa.sistemas_utilizados?.length > 0) {
                     rpa.sistemas_utilizados.forEach((sys, j) => {
-                        const sysIndex = [...new Set([...sistemas, ...integracoes.map(i => i.sistema_externo)])].indexOf(sys);
+                        const allSysList = [...new Set([...sistemas, ...integracoes.map(x => x.sistema_externo)])];
+                        const sysIndex = allSysList.indexOf(sys);
                         if (sysIndex >= 0) {
                             mermaid += `    ${rpaId} <--> SYS${sysIndex}\n`;
                         }
@@ -196,7 +197,7 @@ const DiagramGenerator = (function() {
         // RPAs para bancos
         if (pddData.rpas && bancos.length > 0) {
             pddData.rpas.forEach((rpa, i) => {
-                const rpaId = (rpa.codigo || `RPA${(i+1).toString().padStart(3, '0')}`).replace('-', '');
+                const rpaId = (rpa.codigo || `RPA${(i+1).toString().padStart(3, '0')}`).replace(/-/g, '');
                 mermaid += `    ${rpaId} <-.-> DB${i % bancos.length}\n`;
             });
         }
@@ -234,8 +235,8 @@ const DiagramGenerator = (function() {
         });
         
         sistemas.forEach(sys => {
-            const sysId = sys.replace(/[^a-zA-Z0-9]/g, '');
-            mermaid += `    participant ${sysId} as 💻 ${sys}\n`;
+            const sysId = safeId(sys);
+            mermaid += `    participant ${sysId} as ${sanitize(sys)}\n`;
         });
         
         mermaid += '\n';
@@ -243,8 +244,8 @@ const DiagramGenerator = (function() {
         // Interações
         pddData.integracoes.forEach(int => {
             if (int.sistema_externo) {
-                const sysId = int.sistema_externo.replace(/[^a-zA-Z0-9]/g, '');
-                const proposito = truncate(int.proposito || 'Integração', 30);
+                const sysId = safeId(int.sistema_externo);
+                const proposito = sanitize(truncate(int.proposito || 'Integração', 30));
                 
                 if (int.direcao === 'ENTRADA') {
                     mermaid += `    ${sysId}->>RPA: ${proposito}\n`;
@@ -274,7 +275,8 @@ const DiagramGenerator = (function() {
      */
     function generateTimelineDiagram(cronograma) {
         if (!cronograma?.fases || cronograma.fases.length === 0) {
-            // Cronograma padrão
+            // Cronograma padrão com data dinâmica
+            const today = new Date().toISOString().split('T')[0];
             return {
                 type: 'timeline',
                 title: 'Cronograma do Projeto',
@@ -282,12 +284,12 @@ const DiagramGenerator = (function() {
     title Cronograma do Projeto
     dateFormat YYYY-MM-DD
     section Desenvolvimento
-        Desenvolvimento     :a1, 2024-01-01, 30d
+        Desenvolvimento     :a1, ${today}, 30d
     section Testes
         Testes Integrados   :a2, after a1, 14d
-    section Homologação
+    section Homologacao
         UAT                 :a3, after a2, 14d
-    section Implantação
+    section Implantacao
         Go-live             :a4, after a3, 7d`
             };
         }
@@ -301,12 +303,14 @@ const DiagramGenerator = (function() {
             const taskId = `task${i}`;
             const duracao = parseDuration(fase.duracao_estimada);
             
-            mermaid += `    section ${fase.fase}\n`;
+            const faseName = sanitize(fase.fase || `Fase ${i+1}`);
+            mermaid += `    section ${faseName}\n`;
             
             if (i === 0) {
-                mermaid += `        ${fase.fase}     :${taskId}, 2024-01-01, ${duracao}d\n`;
+                const today = new Date().toISOString().split('T')[0];
+                mermaid += `        ${faseName}     :${taskId}, ${today}, ${duracao}d\n`;
             } else {
-                mermaid += `        ${fase.fase}     :${taskId}, after ${lastTask}, ${duracao}d\n`;
+                mermaid += `        ${faseName}     :${taskId}, after ${lastTask}, ${duracao}d\n`;
             }
             
             lastTask = taskId;
@@ -340,6 +344,30 @@ const DiagramGenerator = (function() {
         return text.substring(0, maxLength - 3) + '...';
     }
 
+    /**
+     * Sanitiza texto para uso em diagramas Mermaid
+     * Remove caracteres que quebram a sintaxe Mermaid
+     */
+    function sanitize(text) {
+        if (!text) return '';
+        return text
+            .replace(/"/g, "'")        // Aspas duplas -> simples
+            .replace(/[[\](){}]/g, '')  // Remove colchetes/parênteses/chaves
+            .replace(/[<>]/g, '')       // Remove < >
+            .replace(/[#;]/g, '')       // Remove # e ;
+            .replace(/\n/g, ' ')        // Newlines -> espaço
+            .replace(/\s+/g, ' ')       // Múltiplos espaços -> um
+            .trim();
+    }
+
+    /**
+     * Gera ID seguro para Mermaid a partir de texto
+     */
+    function safeId(text) {
+        if (!text) return 'UNKNOWN';
+        return text.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'UNKNOWN';
+    }
+
     function parseDuration(duracao) {
         if (!duracao) return 14;
         
@@ -367,30 +395,48 @@ const DiagramGenerator = (function() {
     function generateAllDiagrams(pddData) {
         const diagrams = [];
 
+        console.log('Gerando diagramas a partir do PDD...');
+
         // Fluxo dos RPAs
         const rpaFlow = generateRPAFlowDiagram(pddData.rpas);
-        if (rpaFlow) diagrams.push(rpaFlow);
+        if (rpaFlow) {
+            diagrams.push(rpaFlow);
+            console.log('  + Fluxo dos RPAs');
+        }
 
         // Arquitetura
         const architecture = generateArchitectureDiagram(pddData);
-        if (architecture) diagrams.push(architecture);
+        if (architecture) {
+            diagrams.push(architecture);
+            console.log('  + Arquitetura');
+        }
 
         // Sequência de integrações
         const integrationSeq = generateIntegrationSequence(pddData);
-        if (integrationSeq) diagrams.push(integrationSeq);
+        if (integrationSeq) {
+            diagrams.push(integrationSeq);
+            console.log('  + Sequência de Integrações');
+        }
 
         // Timeline
         const timeline = generateTimelineDiagram(pddData.cronograma_sugerido);
-        if (timeline) diagrams.push(timeline);
+        if (timeline) {
+            diagrams.push(timeline);
+            console.log('  + Timeline/Cronograma');
+        }
 
         // Detalhes de cada RPA
         if (pddData.rpas) {
             pddData.rpas.forEach((rpa, i) => {
                 const rpaDetail = generateRPADetailDiagram(rpa, i);
-                if (rpaDetail) diagrams.push(rpaDetail);
+                if (rpaDetail) {
+                    diagrams.push(rpaDetail);
+                    console.log(`  + Detalhe RPA-${String(i + 1).padStart(3, '0')}`);
+                }
             });
         }
 
+        console.log(`Total de diagramas gerados: ${diagrams.length}`);
         return diagrams;
     }
 
@@ -460,53 +506,91 @@ const DiagramGenerator = (function() {
      * Para uso no Word document
      */
     async function renderToBase64(mermaidCode, width = 800) {
-        return new Promise(async (resolve, reject) => {
+        let tempContainer = null;
+        
+        try {
+            // Criar container temporário visível (necessário para getBBox funcionar corretamente)
+            tempContainer = document.createElement('div');
+            tempContainer.style.position = 'fixed';
+            tempContainer.style.left = '-9999px';
+            tempContainer.style.top = '0';
+            tempContainer.style.width = '1200px';
+            tempContainer.style.height = 'auto';
+            tempContainer.style.background = 'white';
+            tempContainer.style.zIndex = '-1';
+            document.body.appendChild(tempContainer);
+
+            // Renderizar o diagrama com ID único
+            const id = `temp-diagram-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const { svg } = await mermaid.render(id, mermaidCode);
+            tempContainer.innerHTML = svg;
+
+            // Aguardar um frame para garantir renderização
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+            const svgElement = tempContainer.querySelector('svg');
+            if (!svgElement) {
+                throw new Error('SVG não encontrado após renderização');
+            }
+
+            // Obter dimensões de várias formas (fallback)
+            let svgWidth, svgHeight;
+            
             try {
-                // Criar container temporário
-                const tempContainer = document.createElement('div');
-                tempContainer.style.position = 'absolute';
-                tempContainer.style.left = '-9999px';
-                tempContainer.style.top = '-9999px';
-                document.body.appendChild(tempContainer);
-
-                // Renderizar o diagrama
-                const id = `temp-diagram-${Date.now()}`;
-                const { svg } = await mermaid.render(id, mermaidCode);
-                tempContainer.innerHTML = svg;
-
-                const svgElement = tempContainer.querySelector('svg');
-                if (!svgElement) {
-                    document.body.removeChild(tempContainer);
-                    resolve(null);
-                    return;
-                }
-
-                // Obter dimensões
                 const bbox = svgElement.getBBox();
-                const svgWidth = bbox.width || 800;
-                const svgHeight = bbox.height || 400;
+                svgWidth = bbox.width || 800;
+                svgHeight = bbox.height || 400;
+            } catch (bboxError) {
+                // Fallback para viewBox ou atributos
+                const viewBox = svgElement.getAttribute('viewBox');
+                if (viewBox) {
+                    const [, , w, h] = viewBox.split(' ').map(Number);
+                    svgWidth = w || 800;
+                    svgHeight = h || 400;
+                } else {
+                    svgWidth = parseFloat(svgElement.getAttribute('width')) || 800;
+                    svgHeight = parseFloat(svgElement.getAttribute('height')) || 400;
+                }
+            }
 
-                // Criar canvas
-                const canvas = document.createElement('canvas');
-                const scale = width / svgWidth;
-                canvas.width = width;
-                canvas.height = svgHeight * scale;
-                const ctx = canvas.getContext('2d');
+            // Garantir dimensões mínimas
+            svgWidth = Math.max(svgWidth, 200);
+            svgHeight = Math.max(svgHeight, 100);
 
-                // Fundo branco
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Criar canvas
+            const canvas = document.createElement('canvas');
+            const scale = width / svgWidth;
+            canvas.width = Math.round(width);
+            canvas.height = Math.round(svgHeight * scale);
+            const ctx = canvas.getContext('2d');
 
-                // Converter SVG para imagem
-                const svgData = new XMLSerializer().serializeToString(svgElement);
-                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-                const url = URL.createObjectURL(svgBlob);
+            // Fundo branco
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Preparar SVG para conversão
+            // Garantir que o SVG tenha dimensões explícitas
+            svgElement.setAttribute('width', svgWidth);
+            svgElement.setAttribute('height', svgHeight);
+            
+            // Serializar SVG
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            
+            // Usar base64 diretamente (mais confiável que blob URL)
+            const base64Svg = btoa(unescape(encodeURIComponent(svgData)));
+            const dataUrl = `data:image/svg+xml;base64,${base64Svg}`;
+
+            // Converter para PNG via Image
+            return new Promise((resolve) => {
                 const img = new Image();
+                
                 img.onload = () => {
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    URL.revokeObjectURL(url);
-                    document.body.removeChild(tempContainer);
+                    
+                    // Limpar container
+                    if (tempContainer && tempContainer.parentNode) {
+                        document.body.removeChild(tempContainer);
+                    }
                     
                     // Retornar base64
                     const base64 = canvas.toDataURL('image/png').split(',')[1];
@@ -516,42 +600,84 @@ const DiagramGenerator = (function() {
                         height: canvas.height
                     });
                 };
-                img.onerror = () => {
-                    URL.revokeObjectURL(url);
-                    document.body.removeChild(tempContainer);
+                
+                img.onerror = (e) => {
+                    console.error('Erro ao carregar imagem SVG:', e);
+                    if (tempContainer && tempContainer.parentNode) {
+                        document.body.removeChild(tempContainer);
+                    }
                     resolve(null);
                 };
-                img.src = url;
+                
+                img.src = dataUrl;
+            });
 
-            } catch (e) {
-                console.error('Erro ao renderizar diagrama:', e);
-                resolve(null);
+        } catch (e) {
+            console.error('Erro ao renderizar diagrama:', e);
+            if (tempContainer && tempContainer.parentNode) {
+                document.body.removeChild(tempContainer);
             }
-        });
+            return null;
+        }
     }
 
     /**
      * Renderiza todos os diagramas como base64 para o Word
+     * Com timeout para evitar travamento
      */
     async function renderAllForWord(pddData) {
+        // Verificar se mermaid está disponível
+        if (typeof mermaid === 'undefined') {
+            console.warn('Mermaid não está carregado, pulando diagramas');
+            return [];
+        }
+
         const diagrams = generateAllDiagrams(pddData);
         const rendered = [];
 
-        for (const diagram of diagrams) {
+        console.log(`Gerando ${diagrams.length} diagramas para o Word...`);
+
+        // Processar diagramas um por um com pausa entre eles
+        for (let i = 0; i < diagrams.length; i++) {
+            const diagram = diagrams[i];
+            
             try {
-                const result = await renderToBase64(diagram.mermaid, 700);
+                console.log(`[${i + 1}/${diagrams.length}] Renderizando: ${diagram.title}...`);
+                
+                // Timeout maior para diagramas complexos (gantt, flowchart)
+                const timeout = diagram.type === 'timeline' ? 20000 : 15000;
+                
+                const result = await Promise.race([
+                    renderToBase64(diagram.mermaid, 650),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error(`Timeout após ${timeout/1000}s`)), timeout)
+                    )
+                ]);
+                
                 if (result) {
                     rendered.push({
                         title: diagram.title,
                         type: diagram.type,
+                        description: diagram.description || '',
                         ...result
                     });
+                    console.log(`✓ [${i + 1}/${diagrams.length}] Sucesso: ${diagram.title}`);
+                } else {
+                    console.warn(`✗ [${i + 1}/${diagrams.length}] Resultado nulo: ${diagram.title}`);
                 }
+                
+                // Pequena pausa entre diagramas para evitar sobrecarga do browser
+                if (i < diagrams.length - 1) {
+                    await new Promise(r => setTimeout(r, 300));
+                }
+                
             } catch (e) {
-                console.warn(`Não foi possível renderizar: ${diagram.title}`, e);
+                console.warn(`✗ [${i + 1}/${diagrams.length}] Erro em ${diagram.title}:`, e.message);
+                // Continua para o próximo diagrama
             }
         }
 
+        console.log(`═══ Total de diagramas renderizados: ${rendered.length}/${diagrams.length} ═══`);
         return rendered;
     }
 
